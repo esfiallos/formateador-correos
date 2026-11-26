@@ -1,0 +1,14 @@
+{
+  "name": "redacta",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Formateador de correos profesionales: texto a HTML con estilo, listo para pegar en Outlook.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"pruebas/*.test.js\"",
+    "dev": "npx --yes serve sitio"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
