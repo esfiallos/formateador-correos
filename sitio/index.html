@@ -132,8 +132,8 @@
             </label>
           </div>
           <div class="campos-titulo" data-depende="encabezado.mostrar">
-            <input type="text" class="campo-titulo" data-campo="encabezado.titulo" placeholder="Título del correo" aria-label="Título">
-            <input type="text" class="campo-subtitulo" data-campo="encabezado.subtitulo" placeholder="Subtítulo (opcional) · admite {{variables}}" aria-label="Subtítulo">
+            <div class="campo-titulo" id="editorTitulo" role="textbox" aria-label="Título" data-placeholder="Título del correo"></div>
+            <div class="campo-subtitulo" id="editorSubtitulo" role="textbox" aria-label="Subtítulo" data-placeholder="Subtítulo (opcional)"></div>
           </div>
         </div>
 
@@ -191,32 +191,33 @@
           </div>
           <div class="grupo-herr">
             <div class="envoltura-menu">
-              <button type="button" class="boton-variable" data-menu="menuVariable" aria-haspopup="menu" aria-expanded="false" data-tip="Insertar variable"><svg class="ico"><use href="#i-variable"/></svg><span>Variable</span><svg class="ico ico-mini"><use href="#i-flecha"/></svg></button>
+              <button type="button" class="boton-variable" data-menu="menuVariable" aria-haspopup="menu" aria-expanded="false" data-tip="Insertar un dato para completar"><svg class="ico"><use href="#i-variable"/></svg><span>Dato</span><svg class="ico ico-mini"><use href="#i-flecha"/></svg></button>
               <div class="menu a-la-derecha" id="menuVariable" role="menu" hidden>
-                <button type="button" role="menuitem" data-formato="variable"><code>{{ }}</code><span>Obligatoria<small>Se resalta si falta</small></span></button>
-                <button type="button" role="menuitem" data-formato="variable-opcional"><code>{{ ?}}</code><span>Opcional<small>Vacía, se quita su línea</small></span></button>
-                <button type="button" role="menuitem" data-formato="variable-opciones"><code>{{ | ; }}</code><span>Con opciones<small>Se elige con un clic</small></span></button>
+                <button type="button" role="menuitem" data-formato="variable"><span class="chip-var chip-vacio">Ticket</span><span>Obligatorio<small>Se resalta si falta</small></span></button>
+                <button type="button" role="menuitem" data-formato="variable-opcional"><span class="chip-var chip-opcional">Cliente</span><span>Opcional<small>Si queda vacío, su línea no aparece</small></span></button>
+                <button type="button" role="menuitem" data-formato="variable-opciones"><span class="chip-var chip-lleno">CORE IP</span><span>Lista de opciones<small>Se elige con un clic</small></span></button>
                 <hr>
-                <button type="button" role="menuitem" data-formato="variable-hoy"><code>{{hoy}}</code><span>Fecha larga</span></button>
-                <button type="button" role="menuitem" data-formato="variable-fecha"><code>{{fecha}}</code><span>Fecha corta</span></button>
-                <button type="button" role="menuitem" data-formato="variable-hora"><code>{{hora}}</code><span>Hora actual</span></button>
+                <button type="button" role="menuitem" data-formato="variable-hoy"><span class="chip-var chip-auto">Hoy</span><span>Fecha larga<small>Se completa sola</small></span></button>
+                <button type="button" role="menuitem" data-formato="variable-fecha"><span class="chip-var chip-auto">26/11</span><span>Fecha corta<small>Se completa sola</small></span></button>
+                <button type="button" role="menuitem" data-formato="variable-hora"><span class="chip-var chip-auto">14:30</span><span>Hora actual<small>Se completa sola</small></span></button>
               </div>
             </div>
             <button type="button" data-formato="quitar-formato" data-tip="Quitar formato" aria-label="Quitar formato"><svg class="ico"><use href="#i-limpiar"/></svg></button>
           </div>
+          <button type="button" class="boton-codigo" data-accion="alternar-codigo" aria-pressed="false" data-tip="Ver el texto con marcas"><svg class="ico"><use href="#i-codigo"/></svg><span>Código</span></button>
         </div>
 
         <div class="hoja-cuerpo" id="hojaCuerpo">
-          <textarea id="texto" data-campo="texto" spellcheck="true" aria-label="Mensaje" placeholder="Escribe o pega el contenido del correo…&#10;&#10;Pega capturas con Ctrl+V, tablas desde Excel, o elige una plantilla."></textarea>
+          <div class="documento" id="documento" role="textbox" aria-multiline="true" aria-label="Mensaje" data-placeholder="Escribe o pega el contenido del correo… Pega capturas con Ctrl+V, tablas desde Excel o Outlook, o elige una plantilla."></div>
+          <textarea id="texto" data-campo="texto" spellcheck="true" aria-label="Mensaje en código" hidden></textarea>
           <div class="soltar" aria-hidden="true"><svg class="ico"><use href="#i-imagen"/></svg>Suelta la imagen para insertarla</div>
         </div>
 
-        <div class="tira-imagenes" id="tiraImagenes" hidden></div>
 
         <footer class="hoja-estado">
           <span id="estadoTexto"></span>
           <span class="estado-sep" aria-hidden="true"></span>
-          <span class="estado-ayuda"><kbd>Ctrl</kbd>+<kbd>V</kbd> pega imágenes · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> copia el correo</span>
+          <span class="estado-ayuda">Clic en un dato resaltado para completarlo · doble clic para editarlo · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> copia el correo</span>
           <button type="button" class="boton-texto" data-accion="guia"><svg class="ico ico-chico"><use href="#i-ayuda"/></svg>Guía de formato</button>
         </footer>
         <input type="file" id="archivoImagen" accept="image/*" multiple hidden>
@@ -260,15 +261,13 @@
       </div>
 
       <aside class="lateral lateral-diseno" aria-label="Diseño">
-        <details class="seccion" open>
-          <summary>Estilo</summary>
+        <details class="seccion" name="ajustes" open>
+          <summary>Estilo y color</summary>
           <div class="disenos" id="disenos" role="radiogroup" aria-label="Estilo del correo"></div>
-        </details>
-        <details class="seccion" open>
-          <summary>Color principal</summary>
+          <p class="subtitulo-seccion">Color principal</p>
           <div class="paleta" id="paleta" role="radiogroup" aria-label="Color principal"></div>
         </details>
-        <details class="seccion" open>
+        <details class="seccion" name="ajustes">
           <summary>Tipografía</summary>
           <label class="campo"><span>Fuente</span><select data-campo="ajustes.fuente" id="fuente"></select></label>
           <div class="campo">
@@ -281,7 +280,7 @@
             </div>
           </div>
         </details>
-        <details class="seccion">
+        <details class="seccion" name="ajustes">
           <summary>Página</summary>
           <label class="campo">
             <span>Ancho máximo <output id="anchoValor"></output></span>
@@ -289,13 +288,13 @@
           </label>
           <label class="interruptor"><input type="checkbox" data-campo="ajustes.fondo"><span aria-hidden="true"></span>Fondo alrededor del correo</label>
         </details>
-        <details class="seccion">
+        <details class="seccion" name="ajustes">
           <summary>Encabezado y logo</summary>
           <label class="interruptor"><input type="checkbox" data-campo="encabezado.mostrar"><span aria-hidden="true"></span>Mostrar encabezado</label>
           <label class="campo"><span>Logo (URL de una imagen publicada)</span><input type="url" data-campo="ajustes.logo" placeholder="https://tu-empresa.com/logo.png"></label>
           <p class="ayuda">El título y el subtítulo se escriben en <a href="#" data-vista-app="redactar">Redactar</a>.</p>
         </details>
-        <details class="seccion">
+        <details class="seccion" name="ajustes">
           <summary>Firma</summary>
           <label class="interruptor"><input type="checkbox" data-campo="firma.mostrar"><span aria-hidden="true"></span>Incluir firma</label>
           <div data-depende="firma.mostrar">
@@ -310,7 +309,7 @@
             </div>
           </div>
         </details>
-        <details class="seccion">
+        <details class="seccion" name="ajustes">
           <summary>Pie del correo</summary>
           <label class="interruptor"><input type="checkbox" data-campo="pie.mostrar"><span aria-hidden="true"></span>Incluir pie</label>
           <label class="campo" data-depende="pie.mostrar"><span>Texto</span><textarea rows="3" data-campo="pie.texto" placeholder="Aviso de confidencialidad, dirección, etc."></textarea></label>

@@ -1,0 +1,515 @@
+// Editor visual (contenteditable): lo que se escribe ya se ve con formato.
+// Por dentro el correo sigue guardándose como texto con marcas (estado.texto), así funcionan
+// plantillas, variables y vista previa; este módulo convierte HTML del editor ↔ texto.
+
+import { chipHtml, enLineaEditable, marcaDeRecuadro, mdAEditable, textoDeChip } from './editorHtml.js';
+import { analizarBloques, urlSegura, escaparHtml } from './formato.js';
+
+const BLOQUES = new Set([
+  'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI', 'ASIDE', 'BLOCKQUOTE', 'TABLE', 'THEAD', 'TBODY',
+  'TR', 'HR', 'FIGURE', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'PRE', 'CENTER',
+]);
+const IGNORAR = new Set(['SCRIPT', 'STYLE', 'IMG', 'BUTTON', 'META', 'LINK', 'TITLE', 'TEMPLATE', 'SVG', 'OBJECT', 'IFRAME']);
+
+// ───────────────────────── HTML → texto ─────────────────────────
+
+function envolver(marca, contenido) {
+  return contenido
+    .split('\n')
+    .map((linea) => {
+      const [, antes, centro, despues] = linea.match(/^(\s*)(.*?)(\s*)$/);
+      if (!centro) return linea;
+      if (centro.startsWith(marca) && centro.endsWith(marca) && centro.length > marca.length * 2) return linea;
+      return antes + marca + centro + marca + despues;
+    })
+    .join('\n');
+}
+
+function fondoVisible(color) {
+  const c = String(color ?? '').replace(/\s/g, '').toLowerCase();
+  return Boolean(c) && !['transparent', 'inherit', 'initial', 'white', '#fff', '#ffffff', 'rgb(255,255,255)', 'rgba(0,0,0,0)', 'window'].includes(c);
+}
+
+const normalizarHref = (href) => href.trim().replace(/\s/g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29');
+
+/** Contenido en línea de un nodo → texto con marcas (\n = salto de línea). */
+export function enLinea(nodo) {
+  let s = '';
+  for (const n of nodo.childNodes) {
+    if (n.nodeType === 3) {
+      s += n.textContent.replace(/ /g, ' ').replace(/[\r\n\t]+/g, ' ').replace(/​/g, '');
+      continue;
+    }
+    if (n.nodeType !== 1) continue;
+    if (n.classList.contains('chip-var')) {
+      s += n.dataset.md ?? '';
+      continue;
+    }
+    if (n.classList.contains('controles-bloque') || IGNORAR.has(n.tagName)) continue;
+    if (n.tagName === 'BR') {
+      s += '\n';
+      continue;
+    }
+    if (n.classList.contains('bloque-fijo') && n.dataset.md) {
+      s += `\n${n.dataset.md}\n`;
+      continue;
+    }
+
+    const tag = n.tagName;
+    const estilo = n.style ?? {};
+    let interior = enLinea(n);
+    const pesoNormal = /^(normal|[1-4]00)$/.test(estilo.fontWeight ?? '');
+
+    if (tag === 'A') {
+      const href = n.getAttribute('href') ?? '';
+      const texto = interior.trim();
+      if (texto && urlSegura(escaparHtml(href))) {
+        interior = texto === href.trim() ? normalizarHref(href) : `[${texto.replace(/[[\]]/g, '')}](${normalizarHref(href)})`;
+      }
+    } else if ((tag === 'B' || tag === 'STRONG') && !pesoNormal) interior = envolver('**', interior);
+    else if (tag === 'EM' || tag === 'I' || tag === 'CITE') interior = envolver('*', interior);
+    else if (tag === 'U' || tag === 'INS') interior = envolver('++', interior);
+    else if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') interior = envolver('~~', interior);
+    else if (tag === 'MARK') interior = envolver('==', interior);
+    else if (tag === 'SPAN' || tag === 'FONT') {
+      const decoracion = `${estilo.textDecoration ?? ''} ${estilo.textDecorationLine ?? ''}`;
+      if (/^(bold|[6-9]00)$/.test(estilo.fontWeight ?? '')) interior = envolver('**', interior);
+      if (estilo.fontStyle === 'italic') interior = envolver('*', interior);
+      if (/underline/.test(decoracion)) interior = envolver('++', interior);
+      if (/line-through/.test(decoracion)) interior = envolver('~~', interior);
+      if (fondoVisible(estilo.backgroundColor)) interior = envolver('==', interior);
+    }
+
+    const esBloque = BLOQUES.has(tag);
+    if (esBloque && s && !s.endsWith('\n')) s += '\n';
+    s += interior;
+    if (esBloque && !s.endsWith('\n')) s += '\n';
+  }
+  return s;
+}
+
+const limpiarLineas = (s) =>
+  s
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+|\n+$/g, '');
+
+function lista(n, ordenada) {
+  let numero = Number(n.getAttribute('start')) || 1;
+  const salida = [];
+  for (const hijo of n.children) {
+    if (hijo.tagName === 'UL' || hijo.tagName === 'OL') {
+      salida.push(lista(hijo, hijo.tagName === 'OL'));
+      continue;
+    }
+    if (hijo.tagName !== 'LI') continue;
+    const copia = hijo.cloneNode(true);
+    const anidadas = [...copia.children].filter((c) => c.tagName === 'UL' || c.tagName === 'OL');
+    for (const a of anidadas) a.remove();
+    const lineas = limpiarLineas(enLinea(copia)).split('\n').filter((l) => l.trim());
+    if (lineas.length) salida.push((ordenada ? `${numero++}. ` : '- ') + lineas[0] + lineas.slice(1).map((l) => `\n  ${l}`).join(''));
+    for (const a of anidadas) salida.push(lista(a, a.tagName === 'OL'));
+  }
+  return salida.filter(Boolean).join('\n');
+}
+
+function tabla(t) {
+  const filas = [...t.rows];
+  if (!filas.length) return '';
+  const celdas = filas.map((r) => [...r.cells].map((c) => limpiarLineas(enLinea(c)).replace(/\n+/g, ' ').replace(/\|/g, '\\|').trim()));
+  const columnas = Math.max(...celdas.map((f) => f.length));
+  const completas = celdas.map((f) => [...f, ...Array(columnas - f.length).fill('')]);
+  const conCabecera = filas[0].parentElement?.tagName === 'THEAD' || [...filas[0].cells].some((c) => c.tagName === 'TH');
+  const lineas = completas.map((f) => `| ${f.join(' | ')} |`);
+  if (conCabecera) lineas.splice(1, 0, `|${completas[0].map(() => '---').join('|')}|`);
+  return lineas.join('\n');
+}
+
+const tieneHijosDeBloque = (n) => [...n.children].some((c) => BLOQUES.has(c.tagName) || c.classList.contains('bloque-fijo'));
+
+function bloque(n) {
+  if (n.classList.contains('bloque-fijo')) return { md: n.dataset.md ?? '' };
+  switch (n.tagName) {
+    case 'H1':
+    case 'H2':
+    case 'H3':
+    case 'H4':
+    case 'H5':
+    case 'H6': {
+      const nivel = Math.min(3, Number(n.tagName[1]));
+      const texto = limpiarLineas(enLinea(n)).replace(/\n+/g, ' ');
+      return { md: texto ? `${'#'.repeat(nivel)} ${texto}` : '' };
+    }
+    case 'UL':
+    case 'OL':
+      return { md: lista(n, n.tagName === 'OL') };
+    case 'ASIDE':
+    case 'BLOCKQUOTE': {
+      const variante = n.dataset.recuadro || 'info';
+      const lineas = limpiarLineas(enLinea(n)).split('\n').filter((l) => l.trim());
+      return { md: lineas.map((l) => marcaDeRecuadro(variante) + l).join('\n'), recuadro: variante };
+    }
+    case 'TABLE':
+      return { md: tabla(n) };
+    case 'HR':
+      return { md: '---' };
+    case 'PRE':
+      return { md: n.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '') };
+    default:
+      if (tieneHijosDeBloque(n)) return { md: serializar(n) };
+      return { md: limpiarLineas(enLinea(n)) };
+  }
+}
+
+/** HTML del editor (o pegado) → texto con marcas. */
+export function serializar(raiz) {
+  const partes = [];
+  let recuadroAnterior = null;
+  let pendiente = '';
+
+  const agregar = ({ md, recuadro = null }) => {
+    if (!md || !md.trim()) {
+      recuadroAnterior = null;
+      return;
+    }
+    // Dos recuadros seguidos del mismo tipo son uno solo (Enter dentro de un recuadro).
+    if (recuadro && recuadro === recuadroAnterior && partes.length) partes[partes.length - 1] += `\n${md}`;
+    else partes.push(md);
+    recuadroAnterior = recuadro;
+  };
+  const vaciar = () => {
+    const texto = limpiarLineas(pendiente);
+    if (texto) agregar({ md: texto });
+    pendiente = '';
+  };
+
+  for (const n of raiz.childNodes) {
+    const enLineaSuelto = n.nodeType === 3 || (n.nodeType === 1 && !BLOQUES.has(n.tagName) && !n.classList.contains('bloque-fijo'));
+    if (enLineaSuelto) {
+      pendiente += enLinea({ childNodes: [n] });
+      continue;
+    }
+    if (n.nodeType !== 1) continue;
+    vaciar();
+    agregar(bloque(n));
+  }
+  vaciar();
+  return partes.join('\n\n');
+}
+
+/** Quita lo que no aporta de un HTML pegado (Word, Outlook, Google Docs, páginas web). */
+function limpiarPegado(cuerpo) {
+  for (const n of cuerpo.querySelectorAll('style, script, meta, link, title, xml, template, svg, iframe, object, noscript')) n.remove();
+  const recorrido = document.createTreeWalker(cuerpo, NodeFilter.SHOW_COMMENT);
+  const comentarios = [];
+  while (recorrido.nextNode()) comentarios.push(recorrido.currentNode);
+  for (const c of comentarios) c.remove();
+  for (const n of cuerpo.querySelectorAll('*')) if (n.tagName.includes(':')) n.replaceWith(...n.childNodes);
+  return cuerpo;
+}
+
+const esTablaDeExcel = (texto) => {
+  const lineas = texto.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n');
+  return lineas.length > 1 && lineas.every((l) => l.includes('\t'));
+};
+
+// ───────────────────────── Selección ─────────────────────────
+
+function rangoDentro(el) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return null;
+  const rango = sel.getRangeAt(0);
+  return el.contains(rango.commonAncestorContainer) ? rango : null;
+}
+
+function cursorAlFinal(nodo) {
+  const rango = document.createRange();
+  rango.selectNodeContents(nodo);
+  rango.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(rango);
+}
+
+/** Bloque de primer nivel (hijo directo del editor) donde está el cursor. */
+export function bloqueActual(el) {
+  const rango = rangoDentro(el);
+  let n = rango?.startContainer;
+  while (n && n.parentNode !== el) n = n.parentNode;
+  return n?.nodeType === 1 ? n : null;
+}
+
+const desdeHtml = (html) => {
+  const plantilla = document.createElement('template');
+  plantilla.innerHTML = html; // HTML generado por editorHtml.js: todo el texto ya va escapado.
+  return plantilla.content;
+};
+
+// ───────────────────────── Editor ─────────────────────────
+
+/**
+ * @param el          elemento contenteditable
+ * @param contexto    () => { valores, imagenes, ahora }
+ * @param alCambiar   (texto) => void, con el texto serializado
+ * @param unaLinea    título/subtítulo: sin bloques ni saltos
+ * @param alPegarImagenes (archivos) => void
+ */
+export function crearEditorVisual(el, { contexto, alCambiar, unaLinea = false, alPegarImagenes }) {
+  el.contentEditable = 'true';
+  el.spellcheck = true;
+  let temporizador = null;
+  let ultimo = null;
+
+  const leer = () => (unaLinea ? limpiarLineas(enLinea(el)).replace(/\n+/g, ' ') : serializar(el));
+  const marcarVacio = () => el.classList.toggle('vacio', !el.textContent.trim() && !el.querySelector('.chip-var, .bloque-fijo, hr, table'));
+
+  const sincronizar = () => {
+    clearTimeout(temporizador);
+    temporizador = null;
+    const texto = leer();
+    marcarVacio();
+    if (texto === ultimo) return;
+    ultimo = texto;
+    alCambiar(texto);
+  };
+
+  el.addEventListener('input', () => {
+    marcarVacio();
+    clearTimeout(temporizador);
+    temporizador = setTimeout(sincronizar, 140);
+  });
+  el.addEventListener('blur', () => temporizador && sincronizar());
+
+  /** Si el cursor quedó entre dos bloques (fuera de un párrafo), lo lleva al final del bloque anterior. */
+  const acomodarCursor = () => {
+    const rango = rangoDentro(el);
+    if (!rango || !rango.collapsed || rango.startContainer !== el) return;
+    const destino = el.childNodes[rango.startOffset - 1] ?? el.childNodes[rango.startOffset];
+    if (destino?.nodeType === 1 && !destino.classList.contains('bloque-fijo') && !/^(TABLE|HR)$/.test(destino.tagName)) cursorAlFinal(destino);
+  };
+
+  const insertarHtml = (html) => {
+    el.focus();
+    acomodarCursor();
+    document.execCommand('insertHTML', false, html);
+  };
+
+  function insertarTexto(md) {
+    if (unaLinea) return insertarHtml(enLineaEditable(md.replace(/\s*\n\s*/g, ' '), contexto()));
+    const bloques = analizarBloques(md);
+    if (bloques.length === 1 && bloques[0].tipo === 'parrafo') {
+      insertarHtml(bloques[0].lineas.map((l) => enLineaEditable(l, contexto())).join('<br>'));
+    } else if (bloques.length) insertarHtml(mdAEditable(md, contexto()));
+  }
+
+  el.addEventListener('paste', (e) => {
+    const datos = e.clipboardData;
+    if (!datos) return;
+    const archivos = [...datos.files].filter((f) => f.type.startsWith('image/'));
+    const texto = datos.getData('text/plain');
+    const html = datos.getData('text/html');
+    e.preventDefault();
+    if (archivos.length && !texto.trim()) {
+      if (!unaLinea) alPegarImagenes?.(archivos);
+      return;
+    }
+    let md;
+    if (unaLinea || !html || esTablaDeExcel(texto)) md = texto.replace(/\r\n?/g, '\n');
+    else md = serializar(limpiarPegado(new DOMParser().parseFromString(html, 'text/html').body));
+    if (md.trim()) insertarTexto(md);
+  });
+
+  el.addEventListener('drop', (e) => {
+    // Arrastrar texto/HTML desde fuera: lo tratamos como pegado limpio.
+    if (e.dataTransfer?.files?.length) return;
+    const texto = e.dataTransfer?.getData('text/plain');
+    if (!texto) return;
+    e.preventDefault();
+    insertarTexto(texto);
+  });
+
+  el.addEventListener('keydown', (e) => {
+    if (unaLinea && e.key === 'Enter') {
+      e.preventDefault();
+      return;
+    }
+    // Tab en tablas: siguiente celda (y fila nueva al final).
+    if (e.key === 'Tab' && !unaLinea) {
+      const celda = rangoDentro(el)?.startContainer?.parentElement?.closest?.('td, th');
+      if (!celda || !el.contains(celda)) return;
+      e.preventDefault();
+      const celdas = [...celda.closest('table').querySelectorAll('td, th')];
+      let i = celdas.indexOf(celda) + (e.shiftKey ? -1 : 1);
+      if (i >= celdas.length) {
+        const fila = celda.closest('tr');
+        const nueva = document.createElement('tr');
+        for (let k = 0; k < fila.cells.length; k++) nueva.append(Object.assign(document.createElement('td'), { innerHTML: '<br>' }));
+        celda.closest('table').querySelector('tbody, table').append(nueva);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        i = celdas.length;
+      }
+      const destino = celda.closest('table').querySelectorAll('td, th')[Math.max(0, i)];
+      if (destino) cursorAlFinal(destino);
+    }
+  });
+
+  return {
+    el,
+    unaLinea,
+    leer,
+    sincronizar,
+    insertarHtml,
+    insertarTexto,
+    establecer(texto) {
+      clearTimeout(temporizador);
+      temporizador = null;
+      ultimo = texto;
+      el.replaceChildren(desdeHtml(unaLinea ? enLineaEditable(texto ?? '', contexto()) : mdAEditable(texto ?? '', contexto())));
+      marcarVacio();
+    },
+    /** Actualiza lo que muestran los chips (valores de variables) sin redibujar el texto. */
+    refrescarChips() {
+      const ctx = contexto();
+      for (const chip of el.querySelectorAll('.chip-var')) {
+        const { texto, estado } = textoDeChip(chip.dataset.md, ctx);
+        if (chip.textContent !== texto) chip.textContent = texto;
+        chip.className = `chip-var chip-${estado}`;
+      }
+    },
+    reemplazarNodo(nodo, html) {
+      nodo.replaceWith(desdeHtml(html));
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+    quitarNodo(nodo) {
+      const siguiente = nodo.nextElementSibling;
+      nodo.remove();
+      if (!el.firstChild) el.append(Object.assign(document.createElement('p'), { innerHTML: '<br>' }));
+      if (siguiente) cursorAlFinal(siguiente);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+  };
+}
+
+// ───────────────────────── Comandos de la barra ─────────────────────────
+
+function alternarRecuadro(editor, variante) {
+  const el = editor.el;
+  const b = bloqueActual(el);
+  if (!b) {
+    editor.insertarHtml(`<aside data-recuadro="${variante}"><br></aside>`);
+    return;
+  }
+  if (b.tagName === 'ASIDE') {
+    if (b.dataset.recuadro === variante) {
+      const p = document.createElement('p');
+      p.append(...b.childNodes);
+      if (!p.firstChild) p.append(document.createElement('br'));
+      b.replaceWith(p);
+      cursorAlFinal(p);
+    } else b.dataset.recuadro = variante;
+  } else if (/^(P|DIV|H[1-6])$/.test(b.tagName)) {
+    const recuadro = document.createElement('aside');
+    recuadro.dataset.recuadro = variante;
+    recuadro.append(...b.childNodes);
+    if (!recuadro.firstChild) recuadro.append(document.createElement('br'));
+    b.replaceWith(recuadro);
+    cursorAlFinal(recuadro);
+  } else return;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function alternarBloque(editor, etiqueta) {
+  const actual = bloqueActual(editor.el)?.tagName?.toLowerCase();
+  editor.el.focus();
+  document.execCommand('formatBlock', false, actual === etiqueta ? 'p' : etiqueta);
+}
+
+function alternarResaltado(editor) {
+  const rango = rangoDentro(editor.el);
+  if (!rango || rango.collapsed) return;
+  const marca = rango.startContainer.parentElement?.closest('mark, span[style*="background"]');
+  document.execCommand('styleWithCSS', false, true);
+  document.execCommand('hiliteColor', false, marca ? 'transparent' : '#fff1a8');
+  document.execCommand('styleWithCSS', false, false);
+}
+
+function tablaHtml(columnas, cabecera) {
+  const cab = cabecera ?? Array.from({ length: columnas }, (_, i) => `Columna ${i + 1}`);
+  const fila = `<tr>${cab.map(() => '<td><br></td>').join('')}</tr>`;
+  return `<table><thead><tr>${cab.map((c) => `<th>${escaparHtml(c)}</th>`).join('')}</tr></thead><tbody>${fila}${fila}</tbody></table><p><br></p>`;
+}
+
+/** Comandos que no necesitan pedir datos. Devuelve true si lo manejó. */
+export function aplicarComandoVisual(editor, nombre) {
+  const ejecutar = (cmd, valor = null) => {
+    editor.el.focus();
+    document.execCommand(cmd, false, valor);
+  };
+  const enLinea = {
+    negrita: () => ejecutar('bold'),
+    cursiva: () => ejecutar('italic'),
+    subrayado: () => ejecutar('underline'),
+    tachado: () => ejecutar('strikeThrough'),
+    resaltado: () => alternarResaltado(editor),
+    'quitar-formato': () => {
+      ejecutar('removeFormat');
+      ejecutar('unlink');
+    },
+    deshacer: () => ejecutar('undo'),
+    rehacer: () => ejecutar('redo'),
+  };
+  if (enLinea[nombre]) {
+    enLinea[nombre]();
+    return true;
+  }
+  if (editor.unaLinea) return false;
+  const deBloque = {
+    parrafo: () => ejecutar('formatBlock', 'p'),
+    titulo1: () => alternarBloque(editor, 'h1'),
+    titulo2: () => alternarBloque(editor, 'h2'),
+    titulo3: () => alternarBloque(editor, 'h3'),
+    lista: () => ejecutar('insertUnorderedList'),
+    numerada: () => ejecutar('insertOrderedList'),
+    nota: () => alternarRecuadro(editor, 'info'),
+    aviso: () => alternarRecuadro(editor, 'aviso'),
+    critico: () => alternarRecuadro(editor, 'critico'),
+    exito: () => alternarRecuadro(editor, 'exito'),
+    separador: () => editor.insertarHtml('<hr><p><br></p>'),
+    'tabla-detalle': () => editor.insertarHtml(tablaHtml(2, ['Detalle', 'Información'])),
+    'tabla-2': () => editor.insertarHtml(tablaHtml(2)),
+    'tabla-3': () => editor.insertarHtml(tablaHtml(3)),
+    'tabla-4': () => editor.insertarHtml(tablaHtml(4)),
+  };
+  if (deBloque[nombre]) {
+    deBloque[nombre]();
+    return true;
+  }
+  return false;
+}
+
+/** Estado de la barra según el cursor: negrita activa, estilo del párrafo… */
+export function estadoDeLaBarra(editor) {
+  const consultar = (cmd) => {
+    try {
+      return document.queryCommandState(cmd);
+    } catch {
+      return false;
+    }
+  };
+  const b = editor ? bloqueActual(editor.el) : null;
+  const tag = b?.tagName;
+  const estilo = tag === 'H1' ? 'Título' : tag === 'H2' ? 'Sección' : tag === 'H3' ? 'Rótulo' : tag === 'ASIDE' ? 'Recuadro' : 'Texto';
+  return {
+    estilo,
+    negrita: consultar('bold'),
+    cursiva: consultar('italic'),
+    subrayado: consultar('underline'),
+    tachado: consultar('strikeThrough'),
+    lista: consultar('insertUnorderedList'),
+    numerada: consultar('insertOrderedList'),
+  };
+}
+
+export { chipHtml, mdAEditable, rangoDentro };

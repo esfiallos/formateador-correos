@@ -433,3 +433,24 @@ export function textoPlanoEnLinea(texto) {
     .replace(/(^|[^*\w])\*(?=\S)(.+?)(?<=\S)\*(?!\*)/g, '$1$2')
     .replace(/(^|[^_\w])_(?=\S)(.+?)(?<=\S)_(?![_\w])/g, '$1$2');
 }
+
+// ───────────────────────── Variables para el editor visual ─────────────────────────
+
+/** Patrón nuevo (con estado propio) para recorrer variables. */
+export const patronVariable = () => new RegExp(RE_VARIABLE.source, 'g');
+
+/** Desarma una variable: {{Nombre?|a;b}} → { nombre, clave, opcional, predeterminado, opciones, automatica }. */
+export function describirVariable(crudo, predeterminadoCrudo) {
+  const { nombre, opcional } = leerNombre(crudo);
+  const clave = claveDeVariable(nombre);
+  const { predeterminado, opciones } = leerPredeterminado(predeterminadoCrudo);
+  return { nombre, clave, opcional, predeterminado, opciones, automatica: clave in VARIABLES_AUTOMATICAS };
+}
+
+/** Arma el texto {{…}} de una variable a partir de sus datos (lo inverso de describirVariable). */
+export function tokenDeVariable({ nombre, opcional = false, predeterminado = '', opciones = [] }) {
+  const limpio = String(nombre ?? '').replace(/[{}|?;]/g, '').replace(/\s+/g, ' ').trim();
+  const lista = opciones.map((o) => String(o).replace(/[{}|;]/g, '').trim()).filter(Boolean);
+  const extra = lista.length ? `|${lista.join(';')}` : String(predeterminado ?? '').trim() ? `|${String(predeterminado).replace(/[{}|;]/g, '').trim()}` : '';
+  return `{{${limpio}${opcional ? '?' : ''}${extra}}}`;
+}

@@ -1,13 +1,15 @@
 // Interfaz: dos vistas (Redactar · Diseñar), campos enlazados al estado, vista previa y copia.
 
 import { construirCorreo, documentoCompleto, DISENOS, estadoPredeterminado, FUENTES, PALETA, colorValido } from './correo.js';
-import { detectarVariables, textoPlanoEnLinea } from './formato.js';
+import { describirVariable, detectarVariables, patronVariable, textoPlanoEnLinea, tokenDeVariable } from './formato.js';
 import { EJEMPLO_INICIAL, PLANTILLAS } from './plantillas.js';
 import { guardar, leer } from './almacen.js';
 import { copiarConFormato, copiarTexto } from './portapapeles.js';
 import { aviso } from './aviso.js';
 import { enlazarMenus, estiloDeLinea, FORMATOS, insertarBloque } from './editor.js';
-import { esImagen, imagenesUsadas, pesoLegible, procesarImagen } from './imagenes.js';
+import { esImagen, imagenesUsadas, procesarImagen } from './imagenes.js';
+import { aplicarComandoVisual, chipHtml, crearEditorVisual, estadoDeLaBarra, mdAEditable, rangoDentro } from './visual.js';
+import { pedirDatos } from './dialogos.js';
 
 const CLAVES = {
   estado: 'redacta:estado:v1',
@@ -15,11 +17,17 @@ const CLAVES = {
   imagenes: 'redacta:imagenes:v1',
   vista: 'redacta:vista',
   lateral: 'redacta:lateral-plantillas',
+  modo: 'redacta:modo-editor',
 };
 
 const $ = (sel, raiz = document) => raiz.querySelector(sel);
 const $$ = (sel, raiz = document) => [...raiz.querySelectorAll(sel)];
 const textoArea = $('#texto');
+try {
+  document.execCommand('defaultParagraphSeparator', false, 'p');
+} catch {
+  // Navegadores sin el comando: usan <div>, que también se entiende.
+}
 
 // ───────────────────────── Estado ─────────────────────────
 
@@ -92,8 +100,17 @@ function poblarCampos() {
     else if (el.value !== String(valor ?? '')) el.value = valor ?? '';
   }
   actualizarDependientes();
+  aplicarEstiloDocumento();
   $('#anchoValor').textContent = `${estado.ajustes.ancho} px`;
   marcarPaleta();
+}
+
+/** El editor usa la fuente y el tamaño elegidos para el correo: se ve como quedará. */
+function aplicarEstiloDocumento() {
+  const raiz = document.documentElement.style;
+  raiz.setProperty('--doc-fuente', (FUENTES[estado.ajustes.fuente] ?? FUENTES.segoe).pila);
+  raiz.setProperty('--doc-tam', `${estado.ajustes.tamano || 15}px`);
+  raiz.setProperty('--doc-titulos', estado.ajustes.diseno === 'elegante' ? FUENTES.georgia.pila : 'var(--doc-fuente)');
 }
 
 function actualizarDependientes() {
@@ -112,6 +129,7 @@ function alCambiarCampo(evento) {
     else if (otro.type !== 'color') otro.value = el.value;
   }
   if (ruta === 'ajustes.color') marcarPaleta();
+  if (ruta.startsWith('ajustes.')) aplicarEstiloDocumento();
   if (ruta === 'ajustes.ancho') $('#anchoValor').textContent = `${estado.ajustes.ancho} px`;
   if (ruta.endsWith('.mostrar')) actualizarDependientes();
   if (ruta === 'texto') alCambiarTexto();
@@ -198,8 +216,15 @@ function variablesActuales() {
   const enCuerpo = new Map(detectarVariables(estado.texto).map((v) => [v.clave, v.bloque]));
   return detectarVariables(estado.texto, mostrar ? titulo : '', mostrar ? subtitulo : '').map((v) => ({
     ...v,
-    bloque: enCuerpo.get(v.clave) ?? false,
+    bloque: Boolean(enCuerpo.get(v.clave)) && !v.opciones.length,
   }));
+}
+
+/** Recalcula el alto de los campos cuando ya hay diseño (fuentes cargadas, panel con su ancho). */
+function reajustarCampos() {
+  const todos = () => $$('#variables textarea').forEach(autoCrecer);
+  todos();
+  requestAnimationFrame(todos);
 }
 
 function autoCrecer(area) {
@@ -282,7 +307,7 @@ function actualizarVariables() {
       nodos.push(campoDeVariable(v));
     });
     contenedor.replaceChildren(...nodos);
-    for (const area of $$('textarea', contenedor)) autoCrecer(area);
+    reajustarCampos();
     if (conFoco) $(`[data-variable="${CSS.escape(conFoco)}"]`, contenedor)?.focus();
     $('#sinVariables').hidden = variables.length > 0;
     $('#vaciarVariables').hidden = variables.length === 0;
@@ -311,6 +336,7 @@ function pintarProgreso(variables = variablesActuales()) {
 function asignarVariable(clave, valor) {
   estado.valores[clave] = valor;
   pintarProgreso();
+  refrescarChips();
   guardarEstado();
   programarVista();
 }
@@ -333,11 +359,86 @@ function elegirOpcion(chip) {
   asignarVariable(clave, valor);
 }
 
-// ───────────────────────── Editor ─────────────────────────
+function enfocarVariable(clave) {
+  const area = $(`[data-variable="${CSS.escape(clave)}"]`);
+  if (!area) return;
+  area.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  area.focus({ preventScroll: true });
+  const caja = area.closest('.campo-variable');
+  caja.classList.remove('destello');
+  void caja.offsetWidth;
+  caja.classList.add('destello');
+}
+
+// ───────────────────────── Editores ─────────────────────────
+
+let modoEditor = leer(CLAVES.modo, 'visual') === 'codigo' ? 'codigo' : 'visual';
+const contextoEditor = () => ({ valores: estado.valores, imagenes, ahora: new Date() });
+
+function alCambiarDesdeEditor(asignar) {
+  return (texto) => {
+    asignar(texto);
+    pintarEstadoDelTexto();
+    actualizarVariables();
+    guardarEstado();
+    programarVista();
+  };
+}
+
+const editorCuerpo = crearEditorVisual($('#documento'), {
+  contexto: contextoEditor,
+  alCambiar: alCambiarDesdeEditor((t) => {
+    estado.texto = t;
+    textoArea.value = t;
+  }),
+  alPegarImagenes: (archivos) => insertarImagenes(archivos),
+});
+const editorTitulo = crearEditorVisual($('#editorTitulo'), {
+  contexto: contextoEditor,
+  unaLinea: true,
+  alCambiar: alCambiarDesdeEditor((t) => (estado.encabezado.titulo = t)),
+});
+const editorSubtitulo = crearEditorVisual($('#editorSubtitulo'), {
+  contexto: contextoEditor,
+  unaLinea: true,
+  alCambiar: alCambiarDesdeEditor((t) => (estado.encabezado.subtitulo = t)),
+});
+const editores = [editorCuerpo, editorTitulo, editorSubtitulo];
+let editorActivo = editorCuerpo;
+for (const editor of editores) editor.el.addEventListener('focus', () => (editorActivo = editor));
+
+function sincronizarEditores() {
+  for (const editor of editores) editor.sincronizar();
+}
+
+function cargarEditores() {
+  editorCuerpo.establecer(estado.texto);
+  editorTitulo.establecer(estado.encabezado.titulo);
+  editorSubtitulo.establecer(estado.encabezado.subtitulo);
+  textoArea.value = estado.texto;
+}
+
+function refrescarChips() {
+  for (const editor of editores) editor.refrescarChips();
+}
+
+function cambiarModoEditor(modo) {
+  sincronizarEditores();
+  modoEditor = modo;
+  const codigo = modo === 'codigo';
+  if (codigo) textoArea.value = estado.texto;
+  else editorCuerpo.establecer(estado.texto);
+  $('#documento').hidden = codigo;
+  textoArea.hidden = !codigo;
+  $('[data-accion="alternar-codigo"]').setAttribute('aria-pressed', String(codigo));
+  document.body.classList.toggle('modo-codigo', codigo);
+  guardar(CLAVES.modo, modo);
+  editorActivo = editorCuerpo;
+  (codigo ? textoArea : editorCuerpo.el).focus();
+}
 
 function alCambiarTexto() {
   pintarEstadoDelTexto();
-  pintarImagenes();
 }
 
 function pintarEstadoDelTexto() {
@@ -347,7 +448,156 @@ function pintarEstadoDelTexto() {
 }
 
 function pintarEstiloActual() {
-  $('#estiloActual').textContent = estiloDeLinea(textoArea);
+  if (modoEditor === 'codigo') {
+    $('#estiloActual').textContent = estiloDeLinea(textoArea);
+    return;
+  }
+  const barra = estadoDeLaBarra(editorActivo);
+  $('#estiloActual').textContent = editorActivo.unaLinea ? 'Texto' : barra.estilo;
+  for (const nombre of ['negrita', 'cursiva', 'subrayado', 'tachado', 'lista', 'numerada']) {
+    $(`.herramientas [data-formato="${nombre}"]`)?.setAttribute('aria-pressed', String(Boolean(barra[nombre])));
+  }
+}
+
+/** Guarda la selección del editor antes de abrir un diálogo y la devuelve después. */
+async function conSeleccion(editor, pedir) {
+  const rango = rangoDentro(editor.el)?.cloneRange() ?? null;
+  const seleccionado = rango?.toString() ?? '';
+  const datos = await pedir(seleccionado);
+  editor.el.focus();
+  if (rango) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(rango);
+  }
+  return datos;
+}
+
+const nombresDeVariables = () => [...new Set(variablesActuales().map((v) => v.nombre))];
+
+async function pedirVariable({ tipo = 'obligatoria', nombre = '', predeterminado = '', opciones = [] } = {}) {
+  const datos = await pedirDatos({
+    titulo: nombre ? 'Editar dato' : 'Insertar dato',
+    descripcion: 'Un dato es lo que cambia en cada correo (ticket, cliente, área…). Aparece como campo en «Datos del correo».',
+    aceptar: nombre ? 'Guardar' : 'Insertar',
+    campos: [
+      { nombre: 'nombre', etiqueta: 'Nombre del dato', valor: nombre, requerido: true, placeholder: 'Ej. Ticket', sugerencias: nombresDeVariables() },
+      {
+        nombre: 'tipo',
+        etiqueta: 'Tipo',
+        tipo: 'elegir',
+        valor: tipo,
+        opciones: [
+          { valor: 'obligatoria', etiqueta: 'Obligatorio', ayuda: 'Se resalta si falta' },
+          { valor: 'opcional', etiqueta: 'Opcional', ayuda: 'Si queda vacío, su línea no aparece' },
+          { valor: 'opciones', etiqueta: 'Lista de opciones', ayuda: 'Se elige con un clic' },
+        ],
+      },
+      {
+        nombre: 'opciones',
+        etiqueta: 'Opciones (separadas por coma)',
+        valor: opciones.join(', '),
+        placeholder: 'CORE IP, CORE CS, TX, Soporte Digital',
+        requerido: true,
+        visibleSi: (v) => v.tipo === 'opciones',
+      },
+      {
+        nombre: 'predeterminado',
+        etiqueta: 'Valor por defecto (opcional)',
+        valor: predeterminado,
+        placeholder: 'Ej. En revisión',
+        visibleSi: (v) => v.tipo === 'obligatoria',
+      },
+    ],
+  });
+  if (!datos?.nombre) return null;
+  return tokenDeVariable({
+    nombre: datos.nombre,
+    opcional: datos.tipo === 'opcional',
+    predeterminado: datos.tipo === 'obligatoria' ? datos.predeterminado : '',
+    opciones: datos.tipo === 'opciones' ? datos.opciones.split(/[,;]/) : [],
+  });
+}
+
+async function insertarVariable(editor, tipo) {
+  const token = await conSeleccion(editor, (seleccion) => pedirVariable({ tipo, nombre: seleccion.trim().slice(0, 40) }));
+  if (token) editor.insertarHtml(`${chipHtml(token, contextoEditor())}&nbsp;`);
+}
+
+async function editarChip(chip) {
+  const m = patronVariable().exec(chip.dataset.md ?? '');
+  if (!m) return;
+  const v = describirVariable(m[1], m[2]);
+  if (v.automatica) return;
+  const editor = editores.find((e) => e.el.contains(chip));
+  const token = await pedirVariable({
+    tipo: v.opciones.length ? 'opciones' : v.opcional ? 'opcional' : 'obligatoria',
+    nombre: v.nombre,
+    predeterminado: v.predeterminado,
+    opciones: v.opciones,
+  });
+  if (token && editor) editor.reemplazarNodo(chip, chipHtml(token, contextoEditor()));
+}
+
+async function insertarEnlace(editor) {
+  const datos = await conSeleccion(editor, (seleccion) =>
+    pedirDatos({
+      titulo: 'Insertar enlace',
+      aceptar: 'Insertar',
+      campos: [
+        { nombre: 'texto', etiqueta: 'Texto', valor: seleccion, placeholder: 'Ej. Ver el informe' },
+        { nombre: 'url', etiqueta: 'Dirección', tipo: 'url', valor: /^https?:\/\//.test(seleccion) ? seleccion : '', requerido: true, placeholder: 'https://…' },
+      ],
+    }),
+  );
+  if (!datos?.url) return;
+  const url = /^(https?:|mailto:|tel:)/i.test(datos.url) ? datos.url : `https://${datos.url}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.textContent = datos.texto || url;
+  editor.insertarHtml(a.outerHTML);
+}
+
+async function insertarBoton(editor, nodo = null) {
+  const previo = nodo ? /^\[\[\s*(.+?)\s*\|\s*(.+?)\s*\]\]$/.exec(nodo.dataset.md) : null;
+  const datos = await conSeleccion(editor, (seleccion) =>
+    pedirDatos({
+      titulo: nodo ? 'Editar botón' : 'Insertar botón',
+      aceptar: nodo ? 'Guardar' : 'Insertar',
+      campos: [
+        { nombre: 'texto', etiqueta: 'Texto del botón', valor: previo?.[1] ?? (seleccion || 'Ver detalle'), requerido: true },
+        { nombre: 'url', etiqueta: 'Enlace', tipo: 'url', valor: previo?.[2] ?? '', requerido: true, placeholder: 'https://…' },
+      ],
+    }),
+  );
+  if (!datos) return;
+  const md = `[[${datos.texto.replace(/[|\]]/g, ' ')}|${/^(https?:|mailto:)/i.test(datos.url) ? datos.url : `https://${datos.url}`}]]`;
+  const html = mdAEditable(md, contextoEditor());
+  if (nodo) editor.reemplazarNodo(nodo, html);
+  else editor.insertarHtml(`${html}<p><br></p>`);
+}
+
+async function accionDeBloque(boton) {
+  const nodo = boton.closest('.bloque-fijo');
+  const editor = editores.find((e) => e.el.contains(nodo));
+  if (!nodo || !editor) return;
+  const accion = boton.dataset.bloque;
+  if (accion === 'quitar') return editor.quitarNodo(nodo);
+  if (accion === 'editar-boton') return insertarBoton(editor, nodo);
+  const m = /^!\[([^\]]*)\]\(([^)\s]+)\)$/.exec(nodo.dataset.md ?? '');
+  if (!m) return;
+  let [pie, ancho] = m[1].split('|');
+  if (accion === 'ancho') ancho = boton.dataset.valor === '100' ? '' : `${boton.dataset.valor}%`;
+  if (accion === 'pie') {
+    const datos = await pedirDatos({
+      titulo: 'Pie de foto',
+      aceptar: 'Guardar',
+      campos: [{ nombre: 'pie', etiqueta: 'Texto bajo la imagen', valor: /^imagen\s*\d*$/i.test(pie ?? '') ? '' : pie, placeholder: 'Ej. Topología del enlace' }],
+    });
+    if (!datos) return;
+    pie = datos.pie.replace(/[[\]|]/g, ' ') || 'Imagen';
+  }
+  editor.reemplazarNodo(nodo, mdAEditable(`![${pie ?? ''}${ancho ? `|${ancho}` : ''}](${m[2]})`, contextoEditor()));
 }
 
 async function insertarImagenes(archivos) {
@@ -367,68 +617,27 @@ async function insertarImagenes(archivos) {
   }
   if (!tokens.length) return true;
   guardarImagenes();
-  insertarBloque(textoArea, tokens.join('\n\n'), { seleccionar: [2, 2 + tokens[0].indexOf(']') - 2] });
-  aviso(tokens.length === 1 ? 'Imagen insertada. Puedes escribirle un pie de foto.' : `${tokens.length} imágenes insertadas.`, { tipo: 'exito' });
+  const md = tokens.join('\n\n');
+  if (modoEditor === 'codigo') insertarBloque(textoArea, md);
+  else editorCuerpo.insertarHtml(`${mdAEditable(md, contextoEditor())}<p><br></p>`);
+  aviso(tokens.length === 1 ? 'Imagen insertada.' : `${tokens.length} imágenes insertadas.`, { tipo: 'exito' });
   return true;
 }
 
-function pintarImagenes() {
-  const tira = $('#tiraImagenes');
-  const usadas = [...new Set(imagenesUsadas(estado.texto))].filter((id) => imagenes[id]);
-  tira.hidden = usadas.length === 0;
-  const actuales = $$('.miniatura-imagen', tira).map((n) => n.dataset.id).join();
-  if (actuales === usadas.join()) return;
-  tira.replaceChildren(
-    ...usadas.map((id) => {
-      const img = imagenes[id];
-      const item = document.createElement('div');
-      item.className = 'miniatura-imagen';
-      item.dataset.id = id;
-      const ir = document.createElement('button');
-      ir.type = 'button';
-      ir.className = 'mi-ir';
-      ir.title = 'Ir a la imagen en el texto';
-      const vista = Object.assign(document.createElement('img'), { src: img.src, alt: '' });
-      const datos = document.createElement('span');
-      datos.textContent = `${img.ancho}×${img.alto} · ${pesoLegible(img.src)}`;
-      ir.append(vista, datos);
-      const quitar = document.createElement('button');
-      quitar.type = 'button';
-      quitar.className = 'boton-icono mi-quitar';
-      quitar.setAttribute('aria-label', 'Quitar imagen');
-      quitar.innerHTML = '<svg class="ico"><use href="#i-cerrar"/></svg>';
-      item.append(ir, quitar);
-      return item;
-    }),
-  );
-}
-
-function rangoDeImagen(id) {
-  const m = new RegExp(`!\\[[^\\]]*\\]\\(img:${id}\\)`).exec(textoArea.value);
-  return m ? [m.index, m.index + m[0].length] : null;
-}
-
-function irAImagen(id) {
-  const rango = rangoDeImagen(id);
-  if (!rango) return;
-  textoArea.focus();
-  textoArea.setSelectionRange(...rango);
-  const antes = textoArea.value.slice(0, rango[0]).split('\n').length;
-  const alto = parseFloat(getComputedStyle(textoArea).lineHeight) || 22;
-  textoArea.scrollTop = Math.max(0, (antes - 4) * alto);
-}
-
-function quitarImagen(id) {
-  const rango = rangoDeImagen(id);
-  if (!rango) return;
-  let [a, b] = rango;
-  const v = textoArea.value;
-  while (v[b] === '\n' && b - a < 9999 && v[b + 1] === '\n') b++;
-  textoArea.focus();
-  textoArea.setSelectionRange(a, b);
-  document.execCommand('delete') || textoArea.setRangeText('', a, b, 'end');
-  textoArea.dispatchEvent(new Event('input', { bubbles: true }));
-  aviso('Imagen quitada. Ctrl+Z la recupera.');
+async function aplicarFormato(nombre) {
+  if (modoEditor === 'codigo' && editorActivo === editorCuerpo) {
+    FORMATOS[nombre]?.(textoArea);
+    return;
+  }
+  const editor = editorActivo;
+  if (aplicarComandoVisual(editor, nombre)) return;
+  if (nombre === 'enlace') return insertarEnlace(editor);
+  if (nombre === 'boton' && !editor.unaLinea) return insertarBoton(editor);
+  const automaticas = { 'variable-hoy': '{{hoy}}', 'variable-fecha': '{{fecha}}', 'variable-hora': '{{hora}}' };
+  if (automaticas[nombre]) return editor.insertarHtml(`${chipHtml(automaticas[nombre], contextoEditor())}&nbsp;`);
+  const tipos = { variable: 'obligatoria', 'variable-opcional': 'opcional', 'variable-opciones': 'opciones' };
+  if (tipos[nombre]) return insertarVariable(editor, tipos[nombre]);
+  if (editor.unaLinea) aviso('Eso solo se puede usar en el mensaje, no en el título.', { duracion: 2500 });
 }
 
 // ───────────────────────── Vista previa ─────────────────────────
@@ -438,15 +647,23 @@ const vistaLista = new Promise((resolver) => {
   vista.addEventListener('load', resolver, { once: true });
   vista.srcdoc =
     '<!doctype html><html lang="es"><head><meta charset="utf-8"><base target="_blank">' +
-    '<style>html,body{margin:0;padding:0;}body{min-height:100vh;}</style></head><body></body></html>';
+    '<style>html,body{margin:0;padding:0;overflow:hidden;}</style></head><body></body></html>';
 });
 
 let vistaPendiente;
-const generar = () => construirCorreo({ ...estado, imagenes }, { ahora: new Date() });
+const generar = () => (sincronizarEditores(), construirCorreo({ ...estado, imagenes }, { ahora: new Date() }));
 
 function programarVista() {
   clearTimeout(vistaPendiente);
   vistaPendiente = setTimeout(dibujarVista, 90);
+}
+
+/** La vista previa crece con el correo: un solo scroll (el de la página). */
+function ajustarAlturaDeVista() {
+  const doc = vista.contentDocument;
+  if (!doc?.body) return;
+  vista.style.height = '0px';
+  vista.style.height = `${Math.max(doc.documentElement.scrollHeight, 240)}px`;
 }
 
 async function dibujarVista() {
@@ -469,6 +686,8 @@ async function dibujarVista() {
     doc.body.style.backgroundColor = resultado.fondo;
     // El HTML lo arma construirCorreo y escapa todo el texto de la persona.
     doc.body.innerHTML = resultado.html;
+    for (const img of doc.images) if (!img.complete) img.addEventListener('load', ajustarAlturaDeVista, { once: true });
+    ajustarAlturaDeVista();
   }
 }
 
@@ -482,6 +701,7 @@ function marcarCopiado() {
 }
 
 async function copiarCorreo() {
+  sincronizarEditores();
   const { html, texto, faltantes } = generar();
   const ok = await copiarConFormato(html, texto);
   if (!ok) return aviso('No se pudo copiar. Prueba con «Exportar → Descargar .html».', { tipo: 'error' });
@@ -533,7 +753,7 @@ function descargarCorreo() {
 
 // ───────────────────────── Contenido y plantillas ─────────────────────────
 
-const contenidoActual = () => ({
+const contenidoActual = () => (sincronizarEditores(), {
   texto: estado.texto,
   titulo: estado.encabezado.titulo,
   subtitulo: estado.encabezado.subtitulo,
@@ -546,6 +766,7 @@ function aplicarContenido({ texto, titulo, subtitulo, plantilla = null }) {
   estado.encabezado.subtitulo = subtitulo;
   estado.plantilla = plantilla;
   poblarCampos();
+  cargarEditores();
   alCambiarTexto();
   actualizarVariables();
   pintarPlantillaActiva();
@@ -556,7 +777,7 @@ function aplicarContenido({ texto, titulo, subtitulo, plantilla = null }) {
 function limpiarTexto() {
   const previo = contenidoActual();
   aplicarContenido({ texto: '', titulo: '', subtitulo: '' });
-  textoArea.focus();
+  editorCuerpo.el.focus();
   aviso('Contenido borrado.', { accion: 'Deshacer', alHacer: () => aplicarContenido(previo) });
 }
 
@@ -565,6 +786,7 @@ function vaciarVariables() {
   for (const v of variablesActuales()) delete estado.valores[v.clave];
   firmaVariables = null;
   actualizarVariables();
+  refrescarChips();
   guardarEstado();
   programarVista();
   aviso('Datos vaciados.', {
@@ -573,6 +795,7 @@ function vaciarVariables() {
       estado.valores = previos;
       firmaVariables = null;
       actualizarVariables();
+      refrescarChips();
       guardarEstado();
       programarVista();
     },
@@ -659,14 +882,14 @@ function usarPlantilla(p) {
   }
   cerrarCajonEnPantallaChica();
   aviso(`Plantilla «${p.nombre}» cargada.`, { accion: 'Deshacer', alHacer: () => aplicarContenido(previo) });
-  ($('#variables .pendiente textarea') ?? textoArea).focus();
+  ($('#variables .pendiente textarea') ?? editorCuerpo.el).focus();
 }
 
 function usarMensajeLibre() {
   const previo = contenidoActual();
   aplicarContenido({ texto: '', titulo: '', subtitulo: '' });
   cerrarCajonEnPantallaChica();
-  textoArea.focus();
+  editorCuerpo.el.focus();
   if (previo.texto.trim()) aviso('Listo para un mensaje nuevo.', { accion: 'Deshacer', alHacer: () => aplicarContenido(previo) });
 }
 
@@ -767,6 +990,7 @@ function cambiarVista(nombre) {
   document.body.dataset.vistaActual = nombre;
   guardar(CLAVES.vista, nombre);
   if (nombre === 'disenar') dibujarVista();
+  else reajustarCampos();
 }
 
 function alternarPlantillas(abrir) {
@@ -788,6 +1012,8 @@ function alternarPlantillas(abrir) {
 function cambiarDispositivo(tipo) {
   for (const b of $$('[data-dispositivo]')) b.setAttribute('aria-pressed', String(b.dataset.dispositivo === tipo));
   $('#marco').classList.toggle('movil', tipo === 'movil');
+  ajustarAlturaDeVista();
+  setTimeout(ajustarAlturaDeVista, 360);
 }
 
 function irAFaltante() {
@@ -814,6 +1040,7 @@ const ACCIONES = {
   'alternar-plantillas': () => alternarPlantillas(),
   'cerrar-plantillas': () => alternarPlantillas(false),
   guia: () => $('#dialogoGuia').showModal(),
+  'alternar-codigo': () => cambiarModoEditor(modoEditor === 'codigo' ? 'visual' : 'codigo'),
 };
 
 function enlazarEventos() {
@@ -832,7 +1059,7 @@ function enlazarEventos() {
     if (accion) ACCIONES[accion.dataset.accion]?.();
     const formato = e.target.closest('[data-formato]');
     if (formato) {
-      FORMATOS[formato.dataset.formato]?.(textoArea);
+      aplicarFormato(formato.dataset.formato);
       pintarEstiloActual();
     }
     const vistaApp = e.target.closest('[data-vista-app]');
@@ -844,10 +1071,47 @@ function enlazarEventos() {
     if (dispositivo) cambiarDispositivo(dispositivo.dataset.dispositivo);
     const chip = e.target.closest('.chip-opcion');
     if (chip) elegirOpcion(chip);
-    const ir = e.target.closest('.mi-ir');
-    if (ir) irAImagen(ir.closest('.miniatura-imagen').dataset.id);
-    const quitar = e.target.closest('.mi-quitar');
-    if (quitar) quitarImagen(quitar.closest('.miniatura-imagen').dataset.id);
+    const botonDeBloque = e.target.closest('[data-bloque]');
+    if (botonDeBloque) {
+      e.preventDefault();
+      accionDeBloque(botonDeBloque);
+    }
+    const chipVar = e.target.closest('.chip-var');
+    if (chipVar && chipVar.dataset.clave && e.detail === 1) enfocarVariable(chipVar.dataset.clave);
+  });
+
+  document.addEventListener('dblclick', (e) => {
+    const chipVar = e.target.closest('.chip-var');
+    if (chipVar) {
+      e.preventDefault();
+      editarChip(chipVar);
+    }
+  });
+
+  // Estado de la barra (negrita activa, estilo del párrafo) según el cursor.
+  document.addEventListener('selectionchange', () => {
+    if (editores.some((ed) => ed.el.contains(document.activeElement))) pintarEstiloActual();
+  });
+
+  // Atajo Ctrl+K (enlace) en el editor visual.
+  for (const editor of editores) {
+    editor.el.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        insertarEnlace(editor);
+      }
+    });
+  }
+
+  // En un campo de una línea, Enter pasa al siguiente dato (Shift+Enter hace salto de línea).
+  $('#variables').addEventListener('keydown', (e) => {
+    const area = e.target.closest('[data-variable]');
+    if (!area || e.key !== 'Enter' || e.shiftKey || area.closest('.campo-bloque')) return;
+    e.preventDefault();
+    const campos = $$('#variables [data-variable]');
+    const siguiente = campos[campos.indexOf(area) + 1];
+    if (siguiente) siguiente.focus();
+    else editorCuerpo.el.focus();
   });
 
   $('.vistas').addEventListener('keydown', (e) => {
@@ -931,6 +1195,12 @@ function enlazarEventos() {
     $('.velo').hidden = true;
   });
 
+  window.addEventListener('resize', () => {
+    if (estadoVista === 'disenar') ajustarAlturaDeVista();
+    else reajustarCampos();
+  });
+  document.fonts?.ready.then(reajustarCampos);
+
   // Refresca {{hoy}} / {{hora}} cada minuto.
   setInterval(programarVista, 60_000);
 }
@@ -939,6 +1209,8 @@ function enlazarEventos() {
 
 construirControlesDeDiseno();
 poblarCampos();
+cargarEditores();
+if (modoEditor === 'codigo') cambiarModoEditor('codigo');
 actualizarVariables();
 alCambiarTexto();
 pintarPlantillas();

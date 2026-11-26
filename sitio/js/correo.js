@@ -200,7 +200,7 @@ function botonHtml(b, t) {
 const RE_DATOS_IMAGEN = /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i;
 
 /** Resuelve img:ID (imagen pegada) o una URL https; devuelve {src, ancho} o null. */
-function fuenteDeImagen(src, imagenes) {
+export function fuenteDeImagen(src, imagenes) {
   if (src.startsWith('img:')) {
     const img = imagenes?.[src.slice(4)];
     return img && RE_DATOS_IMAGEN.test(img.src) ? { src: img.src, ancho: Number(img.ancho) || null } : null;
