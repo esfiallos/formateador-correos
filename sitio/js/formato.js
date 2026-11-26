@@ -37,6 +37,19 @@ function leerNombre(crudo) {
   return { nombre: opcional ? limpio.slice(0, -1).trim() : limpio, opcional };
 }
 
+/**
+ * Lo que va después de «|»: un valor predeterminado, o una lista de opciones separadas por «;»
+ * ({{Área|CORE IP;CORE CS;TX}}), que se eligen con un clic y no dan valor por defecto.
+ */
+function leerPredeterminado(crudo) {
+  const texto = String(crudo ?? '').trim();
+  if (texto.includes(';')) {
+    const opciones = [...new Set(texto.split(';').map((o) => o.trim()).filter(Boolean))];
+    return { predeterminado: '', opciones };
+  }
+  return { predeterminado: texto, opciones: [] };
+}
+
 export function claveDeVariable(nombre) {
   return leerNombre(nombre).nombre.toLowerCase().replace(/\s+/g, ' ');
 }
@@ -55,12 +68,13 @@ export function detectarVariables(...textos) {
         const { nombre, opcional } = leerNombre(m[1]);
         const clave = claveDeVariable(nombre);
         if (!clave || clave in VARIABLES_AUTOMATICAS) continue;
-        const predeterminado = (m[2] ?? '').trim();
+        const { predeterminado, opciones } = leerPredeterminado(m[2]);
         const bloque = linea.trim() === m[0];
         const previa = vistas.get(clave);
-        if (!previa) vistas.set(clave, { clave, nombre, predeterminado, opcional, bloque });
+        if (!previa) vistas.set(clave, { clave, nombre, predeterminado, opciones, opcional, bloque });
         else {
           if (!previa.predeterminado && predeterminado) previa.predeterminado = predeterminado;
+          if (!previa.opciones.length && opciones.length) previa.opciones = opciones;
           previa.opcional &&= opcional;
           previa.bloque ||= bloque;
         }
@@ -88,22 +102,71 @@ export function sustituirVariables(texto, valores = {}, { ahora = new Date(), ma
     const clave = claveDeVariable(nombre);
     const automatica = VARIABLES_AUTOMATICAS[clave];
     if (automatica) return { valor: automatica(ahora), opcional: false, nombre };
-    return { valor: valorDeVariable({ clave, predeterminado: (predeterminado ?? '').trim() }, valores), opcional, nombre };
+    return { valor: valorDeVariable({ clave, predeterminado: leerPredeterminado(predeterminado).predeterminado }, valores), opcional, nombre };
   };
 
-  const lineas = [];
-  for (const linea of String(texto ?? '').split('\n')) {
-    const opcionales = [...linea.matchAll(RE_VARIABLE)].map((m) => resolver(m[1], m[2])).filter((r) => r.opcional);
-    if (opcionales.length && opcionales.every((r) => !r.valor.trim())) continue;
-    lineas.push(
-      linea.replace(RE_VARIABLE, (_, crudo, predeterminado) => {
+  const items = String(texto ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((linea) => {
+      const opcionales = [...linea.matchAll(RE_VARIABLE)].map((m) => resolver(m[1], m[2])).filter((r) => r.opcional);
+      if (opcionales.length && opcionales.every((r) => !r.valor.trim())) return { texto: linea, quitada: true };
+      const nueva = linea.replace(RE_VARIABLE, (_, crudo, predeterminado) => {
         const { valor, opcional, nombre } = resolver(crudo, predeterminado);
         if (valor.trim()) return valor;
         return marcarFaltantes && !opcional ? MARCA_VARIABLE + nombre + MARCA_VARIABLE : '';
-      }),
-    );
+      });
+      return { texto: nueva, quitada: false };
+    });
+
+  limpiarSeccionesVacias(items);
+  return items
+    .filter((i) => !i.quitada)
+    .map((i) => i.texto)
+    .join('\n');
+}
+
+/**
+ * Tras quitar líneas opcionales: una tabla que quedó sin filas y un título cuya sección quedó
+ * vacía también se quitan (solo si se vaciaron por eso; un título vacío a propósito se respeta).
+ */
+function limpiarSeccionesVacias(items) {
+  const esTabla = (t) => /^\|.*\|$/.test(t.trim());
+  const esTitulo = (t) => /^#{1,3}\s+\S/.test(t.trim());
+  const esCorte = (t) => esTitulo(t) || /^(?:-{3,}|_{3,}|\*{3,}|─{3,})$/.test(t.trim());
+
+  for (let i = 0; i < items.length; ) {
+    if (!esTabla(items[i].texto)) {
+      i++;
+      continue;
+    }
+    let fin = i;
+    while (fin < items.length && esTabla(items[fin].texto)) fin++;
+    const grupo = items.slice(i, fin);
+    const quedan = grupo.filter((g) => !g.quitada);
+    const separadora = quedan[1] && /^\|?\s*:?-{2,}/.test(quedan[1].texto.trim());
+    if (grupo.some((g) => g.quitada) && (quedan.length === 0 || (quedan.length <= 2 && separadora))) {
+      for (const g of grupo) g.quitada = true;
+    }
+    i = fin;
   }
-  return lineas.join('\n');
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].quitada || !esTitulo(items[i].texto)) continue;
+    // La sección es el bloque que sigue al título: hasta la primera línea en blanco tras el contenido.
+    let fin = i + 1;
+    let visto = false;
+    while (fin < items.length) {
+      const item = items[fin];
+      if (!item.quitada && esCorte(item.texto)) break;
+      if (!item.quitada && !item.texto.trim()) {
+        if (visto) break;
+      } else visto = true;
+      fin++;
+    }
+    const seccion = items.slice(i + 1, fin);
+    if (seccion.some((s) => s.quitada) && !seccion.some((s) => !s.quitada && s.texto.trim())) items[i].quitada = true;
+  }
 }
 
 // ───────────────────────── Bloques ─────────────────────────
@@ -113,8 +176,15 @@ const RE_VINETA = /^[-*•·▪◦‣–]\s+(.*)$/;
 const RE_NUMERO = /^(\d{1,3})[.)]\s+(.*)$/;
 const RE_BOTON = /^\[\[\s*(.+?)\s*\|\s*(.+?)\s*\]\]$/;
 const RE_SEPARADOR = /^(?:-{3,}|_{3,}|\*{3,}|─{3,})$/;
-const RE_NOTA = /^>\s?(.*)$/;
-const RE_AVISO = /^!\s+(.*)$/;
+const RE_IMAGEN = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
+/** Recuadros: > nota · ! aviso · !! crítico · ✓ éxito. */
+const RECUADROS = [
+  { tipo: 'critico', re: /^!!\s+(.*)$/ },
+  { tipo: 'exito', re: /^✓\s+(.*)$/ },
+  { tipo: 'nota', re: /^>\s?(.*)$/ },
+  { tipo: 'aviso', re: /^!\s+(.*)$/ },
+];
+const VARIANTE = { nota: 'info', aviso: 'aviso', critico: 'critico', exito: 'exito' };
 const esFilaConBarras = (l) => /^\|.*\|$/.test(l.trim());
 const esFilaConTabs = (l) => l.includes('\t') && l.trim() !== '';
 
@@ -126,8 +196,8 @@ function tipoDeLinea(linea, siguiente) {
   if (RE_SEPARADOR.test(t)) return 'separador';
   if (RE_TITULO.test(t)) return 'titulo';
   if (RE_BOTON.test(t)) return 'boton';
-  if (RE_NOTA.test(t)) return 'nota';
-  if (RE_AVISO.test(t)) return 'aviso';
+  if (RE_IMAGEN.test(t)) return 'imagen';
+  for (const r of RECUADROS) if (r.re.test(t)) return r.tipo;
   if (RE_VINETA.test(t)) return 'vineta';
   if (RE_NUMERO.test(t)) return 'numero';
   return 'texto';
@@ -211,19 +281,33 @@ export function analizarBloques(texto) {
       continue;
     }
 
-    if (tipo === 'nota' || tipo === 'aviso') {
-      const re = tipo === 'nota' ? RE_NOTA : RE_AVISO;
+    if (tipo === 'imagen') {
+      const [, alt, src] = t.match(RE_IMAGEN);
+      const [texto, ancho] = alt.split('|').map((s) => s.trim());
+      const medida = /^(\d{1,4})(%?)$/.exec(ancho ?? '');
+      bloques.push({
+        tipo: 'imagen',
+        alt: texto ?? '',
+        src,
+        ancho: medida ? { valor: Number(medida[1]), porcentaje: medida[2] === '%' } : null,
+      });
+      i++;
+      continue;
+    }
+
+    if (tipo in VARIANTE) {
+      const { re } = RECUADROS.find((r) => r.tipo === tipo);
       const contenido = [];
-      // Una nota sigue mientras las líneas empiecen con su marca (o sean texto pegado a ella).
+      // Un recuadro sigue mientras las líneas empiecen con su marca (o con sangría).
       while (i < lineas.length) {
         const actual = lineas[i].trim();
         const tipoActual = tipoDeLinea(lineas[i], lineas[i + 1]);
         if (tipoActual === tipo) contenido.push(actual.match(re)[1]);
-        else if (tipoActual === 'texto' && contenido.length && tipo === 'nota' && lineas[i].startsWith(' ')) contenido.push(actual);
+        else if (tipoActual === 'texto' && contenido.length && /^\s+/.test(lineas[i])) contenido.push(actual);
         else break;
         i++;
       }
-      bloques.push({ tipo: 'nota', variante: tipo === 'nota' ? 'info' : 'aviso', lineas: contenido });
+      bloques.push({ tipo: 'nota', variante: VARIANTE[tipo], lineas: contenido });
       continue;
     }
 

@@ -142,9 +142,11 @@ function tituloHtml(b, t, primero) {
 function notaHtml(b, t) {
   const fmt = (s) => formatoEnLinea(s, { colorEnlace: t.acentoTexto });
   const c =
-    b.variante === 'aviso'
-      ? { fondo: '#fff7e6', borde: '#f08c00', texto: '#5c3b00' }
-      : { fondo: t.suave, borde: t.acento, texto: t.texto };
+    {
+      aviso: { fondo: '#fff7e6', borde: '#e8890c', texto: '#5c3b00' },
+      critico: { fondo: '#fdeeee', borde: '#c62828', texto: '#5f1414' },
+      exito: { fondo: '#ecf7f0', borde: '#2e8b57', texto: '#1d4d32' },
+    }[b.variante] ?? { fondo: t.suave, borde: t.acento, texto: t.texto };
   return (
     presentacion(
       `<tr><td bgcolor="${c.fondo}" style="background-color:${c.fondo};border-left:4px solid ${c.borde};padding:12px 16px;border-radius:0 6px 6px 0;">` +
@@ -195,7 +197,36 @@ function botonHtml(b, t) {
   );
 }
 
-function bloqueHtml(b, t, indice) {
+const RE_DATOS_IMAGEN = /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i;
+
+/** Resuelve img:ID (imagen pegada) o una URL https; devuelve {src, ancho} o null. */
+function fuenteDeImagen(src, imagenes) {
+  if (src.startsWith('img:')) {
+    const img = imagenes?.[src.slice(4)];
+    return img && RE_DATOS_IMAGEN.test(img.src) ? { src: img.src, ancho: Number(img.ancho) || null } : null;
+  }
+  const url = urlDeImagen(src);
+  return url ? { src: url, ancho: null } : null;
+}
+
+function imagenHtml(b, t, imagenes) {
+  const fuente = fuenteDeImagen(b.src, imagenes);
+  const contenido = t.ancho - 72;
+  if (!fuente) {
+    return `<p style="margin:0 0 14px 0;${t.chica}font-style:italic;">[Imagen no disponible${b.alt ? `: ${escaparHtml(b.alt)}` : ''}]</p>`;
+  }
+  let ancho = Math.min(fuente.ancho ?? contenido, contenido);
+  if (b.ancho) ancho = Math.min(contenido, b.ancho.porcentaje ? Math.round((contenido * b.ancho.valor) / 100) : b.ancho.valor);
+  const pie = b.alt && !/^imagen\s*\d*$/i.test(b.alt) ? b.alt : '';
+  return (
+    `<img src="${fuente.src}" alt="${escaparHtml(b.alt || 'Imagen')}" width="${ancho}" ` +
+    `style="display:block;width:${ancho}px;max-width:100%;height:auto;border:0;outline:none;border-radius:6px;">` +
+    (pie ? `<p style="margin:6px 0 0 0;${t.chica}font-size:${t.tam - 3}px;">${formatoEnLinea(pie, { colorEnlace: t.acentoTexto })}</p>` : '') +
+    espacio(16)
+  );
+}
+
+function bloqueHtml(b, t, indice, imagenes) {
   const fmt = (s) => formatoEnLinea(s, { colorEnlace: t.acentoTexto });
   switch (b.tipo) {
     case 'titulo':
@@ -214,6 +245,8 @@ function bloqueHtml(b, t, indice) {
       return tablaHtml(b, t);
     case 'boton':
       return botonHtml(b, t);
+    case 'imagen':
+      return imagenHtml(b, t, imagenes);
     case 'separador':
       return presentacion(`<tr><td style="padding:8px 0 22px 0;"><div style="border-top:1px solid ${t.linea};height:1px;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>`);
     default:
@@ -333,6 +366,8 @@ function bloquePlano(b) {
       return [b.cabecera, ...b.filas].filter(Boolean).map((f) => f.map(p).join('\t')).join('\n');
     case 'boton':
       return `${p(b.texto)}: ${b.url}`;
+    case 'imagen':
+      return `[Imagen${b.alt ? `: ${b.alt}` : ''}]`;
     case 'separador':
       return '────────────────────';
     default:
@@ -377,7 +412,7 @@ export function construirCorreo(datos, { ahora = new Date() } = {}) {
     filas.unshift(`<tr><td height="6" bgcolor="${t.acento}" style="height:6px;line-height:6px;font-size:1px;background-color:${t.acento};border-radius:${t.radio}px ${t.radio}px 0 0;">&nbsp;</td></tr>`);
   }
 
-  const cuerpo = bloques.map((b, i) => bloqueHtml(b, t, i)).join('');
+  const cuerpo = bloques.map((b, i) => bloqueHtml(b, t, i, datos.imagenes)).join('');
   const firmaFinal = hayFirma(firma) ? firmaHtml(firma, t) : '';
   const rellenoCuerpo = conEncabezado && t.diseno !== 'corporativo' && t.diseno !== 'elegante' ? '24px 36px 32px 36px' : t.relleno;
   if (cuerpo || firmaFinal) filas.push(`<tr><td style="padding:${rellenoCuerpo};${t.base}">${cuerpo}${firmaFinal}</td></tr>`);

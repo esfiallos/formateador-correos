@@ -134,3 +134,25 @@ test('una variable de bloque con una tabla de Excel se vuelve tabla', () => {
   const bloques = analizarBloques(texto);
   assert.deepEqual(bloques.map((b) => b.tipo), ['titulo', 'tabla', 'parrafo']);
 });
+
+test('imágenes, recuadros nuevos y variables con opciones', () => {
+  const bloques = analizarBloques('![Topología|50%](img:abc)\n\n!! caído\n\n✓ operativo\n\n! revisar');
+  assert.deepEqual(bloques[0], { tipo: 'imagen', alt: 'Topología', src: 'img:abc', ancho: { valor: 50, porcentaje: true } });
+  assert.deepEqual(bloques.slice(1).map((b) => b.variante), ['critico', 'exito', 'aviso']);
+
+  const [area] = detectarVariables('Equipo {{Área|CORE IP;CORE CS;TX}}');
+  assert.deepEqual(area.opciones, ['CORE IP', 'CORE CS', 'TX']);
+  assert.equal(area.predeterminado, '');
+  assert.equal(sustituirVariables('{{Área|CORE IP;TX}}', { área: 'TX' }), 'TX');
+});
+
+test('una sección o tabla que queda vacía por variables opcionales desaparece', () => {
+  const texto = 'Hola\n\n| A | B |\n|---|---|\n| X | {{X?}} |\n\n## Comentarios\n{{Comentarios?}}\n\n## Fijo\n\n## Revisiones\n{{Revisiones?}}\n\nFin';
+  const resultado = sustituirVariables(texto, { revisiones: 'ping ok' }).replace(/\n{3,}/g, '\n\n');
+  assert.equal(resultado, 'Hola\n\n## Fijo\n\n## Revisiones\nping ok\n\nFin');
+});
+
+test('un título con su bloque vacío se quita aunque después siga el cierre del correo', () => {
+  const texto = '## Revisiones\n{{Revisiones?}}\n\nGracias por su apoyo.';
+  assert.equal(sustituirVariables(texto, {}).trim(), 'Gracias por su apoyo.');
+});

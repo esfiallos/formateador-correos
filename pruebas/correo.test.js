@@ -118,3 +118,13 @@ test('cada plantilla pide solo las variables de su contexto', () => {
   assert.deepEqual(pide('validacion').sort(), ['Causa', 'Pruebas realizadas', 'Resolución']);
   assert.deepEqual(pide('seguimiento'), []);
 });
+
+test('imágenes pegadas: solo data:image válidas, con ancho limitado al contenido', () => {
+  const imagenes = { a: { src: 'data:image/png;base64,iVBORw0KGgo=', ancho: 2000 }, b: { src: 'javascript:alert(1)', ancho: 10 } };
+  const r = construirCorreo(datos({ texto: '![Imagen 1](img:a)\n\n![x](img:b)\n\n![Logo](https://e.com/l.png)', imagenes }), { ahora });
+  assert.match(r.html, /<img src="data:image\/png;base64,iVBORw0KGgo=" alt="Imagen 1" width="568"/);
+  assert.match(r.html, /Imagen no disponible: x/);
+  assert.match(r.html, /<img src="https:\/\/e\.com\/l\.png"/);
+  assert.ok(!r.html.includes('javascript:'));
+  assert.match(r.texto, /\[Imagen: Imagen 1\]/);
+});

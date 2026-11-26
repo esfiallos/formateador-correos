@@ -28,9 +28,79 @@ Les confirmamos que el caso reportado por **{{Cliente}}** fue recibido y asignad
 Durante la atención les compartiremos las actualizaciones por este medio. Agradecemos conservar el número de ticket como referencia para cualquier consulta.`,
   },
   {
+    id: 'revision-interna',
+    nombre: 'Escalamiento a área interna',
+    categoria: 'Escalamientos',
+    descripcion: 'Pide a CORE IP, CORE CS, TX o Soporte Digital que revise el caso. Solo el área es obligatoria.',
+    titulo: 'Solicitud de revisión · {{Área|CORE IP;CORE CS;TX;Soporte Digital}}',
+    subtitulo: '{{Cliente?}}',
+    cuerpo: `Estimado equipo de {{Área|CORE IP;CORE CS;TX;Soporte Digital}},
+
+Por medio del presente solicitamos su apoyo para revisar el siguiente caso, que requiere la validación de su área para continuar con la atención.
+
+| Detalle | Información |
+|---|---|
+| Cliente | {{Cliente?}} |
+| ID de cliente | {{ID de cliente?}} |
+| ID de enlace | {{ID de enlace?}} |
+| Ticket | {{Ticket?}} |
+
+## Comentarios del cliente
+{{Comentarios del cliente?}}
+
+## Revisiones realizadas
+{{Revisiones realizadas?}}
+
+Agradecemos su pronta revisión y quedamos atentos a sus comentarios para dar continuidad al caso.`,
+  },
+  {
+    id: 'escalado-partner',
+    nombre: 'Caso escalado al partner',
+    categoria: 'Escalamientos',
+    descripcion: 'Informa al cliente que su caso fue escalado al partner para revisión especializada.',
+    titulo: 'Su caso fue escalado',
+    subtitulo: 'Ticket {{Ticket?}}',
+    cuerpo: `Estimado(a) {{Cliente|cliente}},
+
+Le informamos que, como parte de la atención de su caso, este fue **escalado a {{Partner|nuestro partner}}** para su revisión especializada.
+
+| Detalle | Información |
+|---|---|
+| Ticket | {{Ticket?}} |
+| Referencia del partner | {{Referencia del partner?}} |
+| Fecha de escalamiento | {{fecha}} · {{hora}} |
+
+{{Comentario adicional?}}
+
+> Nuestro equipo continuará dando seguimiento con el partner y le compartirá las actualizaciones por este medio hasta la resolución del caso.`,
+  },
+  {
+    id: 'entrega-partner',
+    nombre: 'Entrega de información al partner',
+    categoria: 'Escalamientos',
+    descripcion: 'Envía al partner la información que solicitó (texto, tablas o capturas).',
+    titulo: 'Información solicitada',
+    subtitulo: 'Referencia {{Referencia del partner?}}',
+    cuerpo: `Estimado equipo de {{Partner}},
+
+En atención a su solicitud, compartimos la información requerida para continuar con la revisión del caso.
+
+| Detalle | Información |
+|---|---|
+| Ticket interno | {{Ticket?}} |
+| Referencia del partner | {{Referencia del partner?}} |
+| Cliente | {{Cliente?}} |
+| ID de enlace | {{ID de enlace?}} |
+
+## Información solicitada
+{{Información solicitada}}
+
+Quedamos atentos a cualquier dato adicional que requieran para avanzar con la atención.`,
+  },
+  {
     id: 'caso-escalado',
-    nombre: 'Caso escalado',
-    categoria: 'Casos',
+    nombre: 'Caso escalado (informativo)',
+    categoria: 'Escalamientos',
     descripcion: 'Informativo: texto formal de escalamiento y el payload que pegues.',
     titulo: 'Notificación de escalamiento',
     subtitulo: '{{hoy}}',
@@ -109,7 +179,11 @@ Continuaremos trabajando en el caso y les mantendremos informados sobre cualquie
     subtitulo: 'Ticket {{Ticket?}}',
     cuerpo: `Estimados,
 
-Les informamos que el caso fue atendido y, de acuerdo con nuestras validaciones, el servicio se encuentra operativo. A continuación se detalla la atención realizada:
+Les informamos que el caso fue atendido y, de acuerdo con nuestras validaciones, el servicio se encuentra operativo.
+
+✓ Servicio operativo según nuestro monitoreo.
+
+A continuación se detalla la atención realizada:
 
 ## Causa
 {{Causa}}

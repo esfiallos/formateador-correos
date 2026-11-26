@@ -2,11 +2,11 @@
 
 Convierte texto en un correo con **formato profesional** (HTML con estilos en línea, apto para Outlook) y lo copia con un botón.
 
-- **Pegar y listo:** pega tu texto en *Mensaje*; la vista previa se actualiza al instante.
-- **Plantillas del NOC:** inicio de caso, caso escalado, solicitud de accesos, falta de recursos, actualización, validación del servicio y seguimiento. Cada una pide solo lo que cambia en su contexto; el resto es texto profesional fijo. Puedes crear las tuyas (*Guardar actual como plantilla*), exportarlas e importarlas (JSON).
-- **Variables:** `{{Campo}}` obligatoria (se resalta si falta) · `{{Campo?}}` opcional (vacía, se quita su línea) · `{{Campo|valor}}` con valor predeterminado · una variable sola en su línea pide un campo grande (listados, avances, payload; acepta tablas copiadas de Excel) · `{{hoy}}`, `{{fecha}}`, `{{hora}}` automáticas.
-- **Personalización con vista previa:** 4 estilos (Corporativo, Moderno, Minimal, Elegante), color, fuente, tamaño, ancho, fondo, logo, firma y pie. Vista de escritorio y móvil.
-- **Copiar:** *Copiar correo* (o `Ctrl+Enter`) pone en el portapapeles HTML + texto plano; pégalo en Outlook, Gmail o Word con `Ctrl+V`. También: copiar texto, copiar HTML y descargar `.html`.
+- **Dos vistas:** *Redactar* (plantillas, editor amplio y datos del correo) y *Diseñar y previsualizar* (vista previa de escritorio o móvil con los controles de estilo, color, tipografía, página, encabezado, firma y pie). `Alt+1` / `Alt+2` para cambiar.
+- **Editor:** barra con estilos de párrafo, énfasis, listas, recuadros (nota, aviso, crítico, éxito), enlaces, tablas, botones, separadores y variables. **Imágenes:** pega una captura con `Ctrl+V`, arrástrala o elígela; se reduce y se incrusta en el correo.
+- **Plantillas del NOC:** inicio de caso, actualización, validación del servicio, seguimiento, escalamiento a área interna (CORE IP, CORE CS, TX, Soporte Digital), caso escalado al partner, entrega de información al partner, caso escalado (informativo), solicitud de accesos y falta de recursos. Cada una pide solo lo que cambia; el resto es texto profesional fijo. Puedes crear las tuyas, exportarlas e importarlas (JSON).
+- **Variables:** `{{Campo}}` obligatoria · `{{Campo?}}` opcional (vacía, se quita su línea, y su tabla o sección si quedan vacías) · `{{Campo|valor}}` predeterminado · `{{Área|CORE IP;TX}}` opciones con un clic · una variable sola en su línea pide un campo grande (acepta tablas de Excel) · `{{hoy}}`, `{{fecha}}`, `{{hora}}` automáticas.
+- **Copiar:** *Copiar correo* (o `Ctrl+Enter`) pone HTML + texto plano en el portapapeles; pégalo en Outlook con `Ctrl+V`. *Exportar* copia el texto sin formato o el HTML, o descarga un `.html`.
 
 Todo funciona en el navegador; nada se envía a ningún servidor. Ajustes y plantillas propias se guardan en `localStorage`.
 

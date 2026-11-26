@@ -5,195 +5,299 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Redacta · Formateador de correos</title>
   <meta name="description" content="Convierte texto en correos profesionales con formato, listos para copiar y pegar en Outlook.">
-  <meta name="theme-color" content="#1b3461">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231b3461'/%3E%3Cpath d='M8 11h16v10H8z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='m8 11 8 6 8-6' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#faf7f2">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231b3461'/%3E%3Cpath d='M8 11h16v10H8z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='m8 11 8 6 8-6' fill='none' stroke='%23e2a37f' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="css/app.css">
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
+  <!-- Iconos (trazo 1.8, 24×24) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-pluma" viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 6 8 7 8-7"/></symbol>
+      <symbol id="i-redactar" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></symbol>
+      <symbol id="i-disenar" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.9 2-2 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1.1.9-2 2-2h2.4A3.8 3.8 0 0 0 21 10.4C21 6.3 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7.2" r="1.2"/><circle cx="14.5" cy="7.2" r="1.2"/></symbol>
+      <symbol id="i-copiar" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+      <symbol id="i-flecha" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+      <symbol id="i-deshacer" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+      <symbol id="i-rehacer" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></symbol>
+      <symbol id="i-negrita" viewBox="0 0 24 24"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></symbol>
+      <symbol id="i-cursiva" viewBox="0 0 24 24"><path d="M10 5h8M6 19h8M14 5l-4 14"/></symbol>
+      <symbol id="i-subrayado" viewBox="0 0 24 24"><path d="M7 4v7a5 5 0 0 0 10 0V4M5 20h14"/></symbol>
+      <symbol id="i-tachado" viewBox="0 0 24 24"><path d="M5 12h14M16 6.5C15.3 5 13.8 4 12 4c-2.5 0-4 1.4-4 3.2 0 1 .5 1.9 1.6 2.6M8 17.5c.7 1.5 2.2 2.5 4 2.5 2.5 0 4-1.4 4-3.2 0-.7-.2-1.3-.6-1.8"/></symbol>
+      <symbol id="i-resaltar" viewBox="0 0 24 24"><path d="m9 11-5 5v4h4l5-5"/><path d="m9 11 6-6 4 4-6 6z"/></symbol>
+      <symbol id="i-limpiar" viewBox="0 0 24 24"><path d="M5 6h10M10 6l-3 13M15 13l5 5M20 13l-5 5"/></symbol>
+      <symbol id="i-lista" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/></symbol>
+      <symbol id="i-numerada" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M4 4h2v4M4 10.5h2.5L4 14h2.5M4 16h2.5v4H4M4 18h2"/></symbol>
+      <symbol id="i-recuadro" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14"/></symbol>
+      <symbol id="i-enlace" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+      <symbol id="i-imagen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.6"/><path d="m21 16-5-5-9 9"/></symbol>
+      <symbol id="i-tabla" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 10v9M15 10v9"/></symbol>
+      <symbol id="i-boton" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="5"/><path d="M8 12h8"/></symbol>
+      <symbol id="i-separador" viewBox="0 0 24 24"><path d="M3 12h18M7 7h10M7 17h10" opacity=".45"/><path d="M3 12h18"/></symbol>
+      <symbol id="i-variable" viewBox="0 0 24 24"><path d="M8 4c-2 0-3 1-3 3v2c0 1.5-1 2.5-2 3 1 .5 2 1.5 2 3v2c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2c0 1.5 1 2.5 2 3-1 .5-2 1.5-2 3v2c0 2-1 3-3 3"/></symbol>
+      <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+      <symbol id="i-buscar" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+      <symbol id="i-mas" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-basura" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+      <symbol id="i-escritorio" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+      <symbol id="i-movil" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+      <symbol id="i-ayuda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/></symbol>
+      <symbol id="i-descargar" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-codigo" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/></symbol>
+      <symbol id="i-texto" viewBox="0 0 24 24"><path d="M5 6h14M5 10h14M5 14h10M5 18h7"/></symbol>
+      <symbol id="i-cerrar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-subir" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></symbol>
+      <symbol id="i-guardar" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+    </defs>
+  </svg>
+
   <header class="barra">
     <div class="marca">
-      <span class="marca-icono" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 6h16v12H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m4 6 8 7 8-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-      </span>
-      <div>
+      <span class="marca-icono" aria-hidden="true"><svg class="ico"><use href="#i-pluma"/></svg></span>
+      <div class="marca-texto">
         <strong>Redacta</strong>
         <span>Correos profesionales para el NOC</span>
       </div>
     </div>
+
+    <nav class="vistas" role="tablist" aria-label="Vista">
+      <button type="button" role="tab" id="tab-redactar" aria-controls="vista-redactar" aria-selected="true" data-vista-app="redactar" title="Alt + 1">
+        <svg class="ico"><use href="#i-redactar"/></svg><span>Redactar</span><span class="contador-faltan" id="faltanNav" hidden></span>
+      </button>
+      <button type="button" role="tab" id="tab-disenar" aria-controls="vista-disenar" aria-selected="false" data-vista-app="disenar" title="Alt + 2">
+        <svg class="ico"><use href="#i-disenar"/></svg><span>Diseñar<span class="texto-largo"> y previsualizar</span></span>
+      </button>
+      <span class="vistas-indicador" aria-hidden="true"></span>
+    </nav>
+
     <div class="barra-acciones">
-      <button type="button" class="boton boton-fantasma solo-ancho" data-accion="copiar-texto" title="Copia la versión sin formato">Copiar texto</button>
-      <button type="button" class="boton boton-fantasma solo-ancho" data-accion="copiar-html" title="Copia el código HTML del correo">Copiar HTML</button>
-      <button type="button" class="boton boton-fantasma solo-ancho" data-accion="descargar" title="Descarga el correo como archivo .html">Descargar</button>
-      <button type="button" class="boton boton-primario" data-accion="copiar" title="Ctrl + Enter">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-        Copiar correo
+      <div class="envoltura-menu">
+        <button type="button" class="boton boton-fantasma" data-menu="menuExportar" aria-haspopup="menu" aria-expanded="false">
+          Exportar <svg class="ico ico-chico"><use href="#i-flecha"/></svg>
+        </button>
+        <div class="menu" id="menuExportar" role="menu" hidden>
+          <button type="button" role="menuitem" data-accion="copiar-texto"><svg class="ico"><use href="#i-texto"/></svg><span>Copiar texto sin formato</span></button>
+          <button type="button" role="menuitem" data-accion="copiar-html"><svg class="ico"><use href="#i-codigo"/></svg><span>Copiar código HTML</span></button>
+          <button type="button" role="menuitem" data-accion="descargar"><svg class="ico"><use href="#i-descargar"/></svg><span>Descargar .html</span></button>
+        </div>
+      </div>
+      <button type="button" class="boton boton-primario boton-copiar" data-accion="copiar" title="Ctrl + Enter">
+        <svg class="ico ico-copiar"><use href="#i-copiar"/></svg><svg class="ico ico-ok"><use href="#i-check"/></svg>
+        <span class="rotulo-copiar">Copiar correo</span><span class="rotulo-ok">¡Copiado!</span>
       </button>
     </div>
   </header>
 
-  <main class="espacio">
-    <section class="panel panel-editor" aria-label="Editor">
-      <nav class="pestanas" role="tablist">
-        <button type="button" role="tab" id="tab-contenido" aria-controls="panel-contenido" aria-selected="true" data-pestana="contenido">Contenido</button>
-        <button type="button" role="tab" id="tab-plantillas" aria-controls="panel-plantillas" aria-selected="false" data-pestana="plantillas">Plantillas</button>
-        <button type="button" role="tab" id="tab-diseno" aria-controls="panel-diseno" aria-selected="false" data-pestana="diseno">Diseño</button>
-        <button type="button" role="tab" id="tab-firma" aria-controls="panel-firma" aria-selected="false" data-pestana="firma">Firma y pie</button>
-      </nav>
+  <main class="escritorio">
+    <!-- ═══════════════ REDACTAR ═══════════════ -->
+    <section class="vista vista-redactar" id="vista-redactar" role="tabpanel" aria-labelledby="tab-redactar" data-vista="redactar">
 
-      <!-- Contenido -->
-      <div class="pestana-panel" role="tabpanel" id="panel-contenido" aria-labelledby="tab-contenido" data-panel="contenido">
-        <div class="grupo">
-          <div class="grupo-cabecera">
-            <h2>Encabezado</h2>
-            <label class="interruptor"><input type="checkbox" data-campo="encabezado.mostrar"><span aria-hidden="true"></span>Mostrar</label>
+      <aside class="lateral lateral-plantillas" id="lateralPlantillas" aria-label="Plantillas">
+        <div class="lateral-cabecera">
+          <h2>Plantillas</h2>
+          <button type="button" class="boton-icono solo-cajon" data-accion="cerrar-plantillas" aria-label="Cerrar plantillas"><svg class="ico"><use href="#i-cerrar"/></svg></button>
+        </div>
+        <label class="buscador">
+          <svg class="ico"><use href="#i-buscar"/></svg>
+          <input type="search" id="buscarPlantilla" placeholder="Buscar plantilla…" aria-label="Buscar plantilla">
+        </label>
+        <div class="lista-plantillas" id="listaPlantillas"></div>
+        <div class="lateral-pie">
+          <button type="button" class="boton boton-secundario boton-ancho" data-accion="guardar-plantilla">
+            <svg class="ico"><use href="#i-guardar"/></svg>Guardar como plantilla
+          </button>
+          <div class="fila-acciones">
+            <button type="button" class="boton-texto" data-accion="importar"><svg class="ico ico-chico"><use href="#i-subir"/></svg>Importar</button>
+            <button type="button" class="boton-texto" data-accion="exportar"><svg class="ico ico-chico"><use href="#i-descargar"/></svg>Exportar mías</button>
           </div>
-          <div class="campos-2" data-depende="encabezado.mostrar">
-            <label class="campo"><span>Título</span><input type="text" data-campo="encabezado.titulo" placeholder="Ej. Informe semanal"></label>
-            <label class="campo"><span>Subtítulo</span><input type="text" data-campo="encabezado.subtitulo" placeholder="Ej. Operaciones · {{hoy}}"></label>
+        </div>
+        <input type="file" id="archivoPlantillas" accept="application/json,.json" hidden>
+      </aside>
+      <div class="velo" data-accion="cerrar-plantillas" hidden></div>
+
+      <section class="hoja" aria-label="Editor">
+        <div class="hoja-encabezado">
+          <div class="hoja-encabezado-fila">
+            <button type="button" class="boton-icono" data-accion="alternar-plantillas" aria-label="Mostrar u ocultar plantillas" title="Plantillas" aria-controls="lateralPlantillas">
+              <svg class="ico"><use href="#i-panel"/></svg>
+            </button>
+            <span class="plantilla-activa" id="plantillaActiva">Mensaje libre</span>
+            <label class="interruptor interruptor-chico" title="Mostrar el encabezado con título y subtítulo">
+              <input type="checkbox" data-campo="encabezado.mostrar"><span aria-hidden="true"></span>Encabezado
+            </label>
+          </div>
+          <div class="campos-titulo" data-depende="encabezado.mostrar">
+            <input type="text" class="campo-titulo" data-campo="encabezado.titulo" placeholder="Título del correo" aria-label="Título">
+            <input type="text" class="campo-subtitulo" data-campo="encabezado.subtitulo" placeholder="Subtítulo (opcional) · admite {{variables}}" aria-label="Subtítulo">
           </div>
         </div>
 
-        <div class="grupo">
-          <div class="grupo-cabecera">
-            <h2>Mensaje</h2>
-            <div class="acciones-mini">
-              <button type="button" class="boton-texto" data-accion="pegar">Pegar</button>
-              <button type="button" class="boton-texto" data-accion="limpiar">Limpiar</button>
+        <div class="herramientas" role="toolbar" aria-label="Formato">
+          <div class="grupo-herr">
+            <button type="button" data-formato="deshacer" data-tip="Deshacer · Ctrl+Z" aria-label="Deshacer"><svg class="ico"><use href="#i-deshacer"/></svg></button>
+            <button type="button" data-formato="rehacer" data-tip="Rehacer · Ctrl+Y" aria-label="Rehacer"><svg class="ico"><use href="#i-rehacer"/></svg></button>
+          </div>
+          <div class="grupo-herr envoltura-menu">
+            <button type="button" class="boton-menu-herr" data-menu="menuEstilo" aria-haspopup="menu" aria-expanded="false" data-tip="Estilo del párrafo">
+              <span id="estiloActual">Texto</span><svg class="ico ico-chico"><use href="#i-flecha"/></svg>
+            </button>
+            <div class="menu menu-estilos" id="menuEstilo" role="menu" hidden>
+              <button type="button" role="menuitem" data-formato="parrafo"><span class="ej ej-texto">Texto normal</span></button>
+              <button type="button" role="menuitem" data-formato="titulo1"><span class="ej ej-t1">Título</span><kbd>#</kbd></button>
+              <button type="button" role="menuitem" data-formato="titulo2"><span class="ej ej-t2">Sección</span><kbd>##</kbd></button>
+              <button type="button" role="menuitem" data-formato="titulo3"><span class="ej ej-t3">RÓTULO</span><kbd>###</kbd></button>
             </div>
           </div>
-          <div class="herramientas" role="toolbar" aria-label="Formato">
-            <button type="button" data-formato="negrita" title="Negrita (Ctrl+B)" aria-label="Negrita"><b>B</b></button>
-            <button type="button" data-formato="cursiva" title="Cursiva (Ctrl+I)" aria-label="Cursiva"><i>I</i></button>
-            <button type="button" data-formato="subrayado" title="Subrayado (Ctrl+U)" aria-label="Subrayado"><u>S</u></button>
-            <button type="button" data-formato="resaltado" title="Resaltar" aria-label="Resaltar"><span class="ico-resaltado">ab</span></button>
-            <span class="separador-herr" aria-hidden="true"></span>
-            <button type="button" data-formato="titulo" title="Título de sección" aria-label="Título">H</button>
-            <button type="button" data-formato="lista" title="Lista con viñetas" aria-label="Lista con viñetas">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="5" cy="7" r="1.6" fill="currentColor"/><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="5" cy="17" r="1.6" fill="currentColor"/><path d="M10 7h10M10 12h10M10 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <button type="button" data-formato="numerada" title="Lista numerada" aria-label="Lista numerada">1.</button>
-            <button type="button" data-formato="nota" title="Nota destacada (>)" aria-label="Nota destacada">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 4v16" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M10 8h9M10 12h9M10 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <button type="button" data-formato="aviso" title="Aviso importante (!)" aria-label="Aviso importante">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3 2 20h20Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <span class="separador-herr" aria-hidden="true"></span>
-            <button type="button" data-formato="enlace" title="Enlace" aria-label="Enlace">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <button type="button" data-formato="tabla" title="Tabla" aria-label="Tabla">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M9 10v9M15 10v9" stroke="currentColor" stroke-width="2"/></svg>
-            </button>
-            <button type="button" data-formato="boton" title="Botón con enlace" aria-label="Botón">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <button type="button" data-formato="separador" title="Línea separadora" aria-label="Separador">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <button type="button" data-formato="variable" title="Convertir en variable {{ }}" aria-label="Variable" class="herr-variable">{ }</button>
+          <div class="grupo-herr">
+            <button type="button" data-formato="negrita" data-tip="Negrita · Ctrl+B" aria-label="Negrita"><svg class="ico"><use href="#i-negrita"/></svg></button>
+            <button type="button" data-formato="cursiva" data-tip="Cursiva · Ctrl+I" aria-label="Cursiva"><svg class="ico"><use href="#i-cursiva"/></svg></button>
+            <button type="button" data-formato="subrayado" data-tip="Subrayado · Ctrl+U" aria-label="Subrayado"><svg class="ico"><use href="#i-subrayado"/></svg></button>
+            <button type="button" data-formato="tachado" data-tip="Tachado" aria-label="Tachado"><svg class="ico"><use href="#i-tachado"/></svg></button>
+            <button type="button" data-formato="resaltado" data-tip="Resaltar" aria-label="Resaltar"><svg class="ico"><use href="#i-resaltar"/></svg></button>
           </div>
-          <textarea id="texto" data-campo="texto" spellcheck="true" placeholder="Pega o escribe aquí el contenido del correo…"></textarea>
-          <p class="ayuda">Ctrl+B negrita · Ctrl+I cursiva · <strong>Ctrl+Enter copia el correo</strong></p>
-        </div>
-
-        <div class="grupo" id="grupoVariables" hidden>
-          <div class="grupo-cabecera">
-            <h2>Variables <span class="insignia" id="conteoVariables"></span></h2>
-            <button type="button" class="boton-texto" data-accion="vaciar-variables">Vaciar</button>
-          </div>
-          <div id="variables" class="campos-2"></div>
-        </div>
-
-        <details class="guia">
-          <summary>Guía de formato</summary>
-          <dl>
-            <dt><code># Título</code> · <code>## Sección</code> · <code>### Rótulo</code></dt><dd>Títulos de tres tamaños</dd>
-            <dt><code>**negrita**</code> · <code>*cursiva*</code> · <code>++subrayado++</code></dt><dd>Énfasis</dd>
-            <dt><code>==resaltado==</code> · <code>~~tachado~~</code></dt><dd>Marcas</dd>
-            <dt><code>- punto</code> · <code>1. paso</code></dt><dd>Listas (sangría para continuar un punto)</dd>
-            <dt><code>&gt; nota</code> · <code>! aviso</code></dt><dd>Recuadros destacados</dd>
-            <dt><code>[texto](https://…)</code></dt><dd>Enlace (las URL y correos sueltos también)</dd>
-            <dt><code>[[Texto del botón|https://…]]</code></dt><dd>Botón, en su propia línea</dd>
-            <dt><code>| A | B |</code> + <code>|---|---|</code></dt><dd>Tabla; también puedes pegarla desde Excel</dd>
-            <dt><code>---</code></dt><dd>Línea separadora</dd>
-            <dt><code>{{Nombre}}</code> · <code>{{Nombre|valor}}</code></dt><dd>Variable obligatoria (con valor predeterminado)</dd>
-            <dt><code>{{Nombre?}}</code></dt><dd>Opcional: si queda vacía se quita su línea completa</dd>
-            <dt><code>{{Listado}}</code> sola en su línea</dt><dd>Campo grande para listados o tablas de Excel</dd>
-            <dt><code>{{hoy}}</code> · <code>{{fecha}}</code> · <code>{{hora}}</code></dt><dd>Se completan solas</dd>
-          </dl>
-        </details>
-      </div>
-
-      <!-- Plantillas -->
-      <div class="pestana-panel" role="tabpanel" id="panel-plantillas" aria-labelledby="tab-plantillas" data-panel="plantillas" hidden>
-        <div class="grupo">
-          <div class="grupo-cabecera">
-            <h2>Plantillas</h2>
-            <div class="acciones-mini">
-              <button type="button" class="boton-texto" data-accion="importar">Importar</button>
-              <button type="button" class="boton-texto" data-accion="exportar">Exportar mías</button>
-            </div>
-          </div>
-          <p class="lead-plantillas">Elige una plantilla o crea la tuya con tu propio contenido.</p>
-          <p class="ayuda">Para crear una: escribe el mensaje en <strong>Contenido</strong> (usa <code>{{Ticket}}</code>, <code>{{ID}}</code>… para lo que cambia) y pulsa <strong>Guardar actual como plantilla</strong>. Usar una plantilla reemplaza el contenido actual (puedes deshacerlo).</p>
-          <div class="fila-busqueda">
-            <input type="search" id="buscarPlantilla" placeholder="Buscar plantilla…" aria-label="Buscar plantilla">
-            <button type="button" class="boton boton-secundario" data-accion="guardar-plantilla">Guardar actual como plantilla</button>
-          </div>
-          <div id="listaPlantillas" class="lista-plantillas"></div>
-          <input type="file" id="archivoPlantillas" accept="application/json,.json" hidden>
-        </div>
-      </div>
-
-      <!-- Diseño -->
-      <div class="pestana-panel" role="tabpanel" id="panel-diseno" aria-labelledby="tab-diseno" data-panel="diseno" hidden>
-        <div class="grupo">
-          <div class="grupo-cabecera"><h2>Estilo</h2></div>
-          <div class="disenos" id="disenos" role="radiogroup" aria-label="Estilo del correo"></div>
-        </div>
-        <div class="grupo">
-          <div class="grupo-cabecera"><h2>Color principal</h2></div>
-          <div class="paleta" id="paleta" role="radiogroup" aria-label="Color principal"></div>
-        </div>
-        <div class="grupo">
-          <div class="grupo-cabecera"><h2>Texto</h2></div>
-          <div class="campos-2">
-            <label class="campo"><span>Fuente</span><select data-campo="ajustes.fuente" id="fuente"></select></label>
-            <div class="campo">
-              <span>Tamaño</span>
-              <div class="segmentado" role="radiogroup" aria-label="Tamaño del texto">
-                <label><input type="radio" name="tamano" value="13" data-campo="ajustes.tamano" data-numero><span>13</span></label>
-                <label><input type="radio" name="tamano" value="14" data-campo="ajustes.tamano" data-numero><span>14</span></label>
-                <label><input type="radio" name="tamano" value="15" data-campo="ajustes.tamano" data-numero><span>15</span></label>
-                <label><input type="radio" name="tamano" value="16" data-campo="ajustes.tamano" data-numero><span>16</span></label>
+          <div class="grupo-herr">
+            <button type="button" data-formato="lista" data-tip="Lista con viñetas" aria-label="Lista con viñetas"><svg class="ico"><use href="#i-lista"/></svg></button>
+            <button type="button" data-formato="numerada" data-tip="Lista numerada" aria-label="Lista numerada"><svg class="ico"><use href="#i-numerada"/></svg></button>
+            <div class="envoltura-menu">
+              <button type="button" data-menu="menuRecuadro" aria-haspopup="menu" aria-expanded="false" data-tip="Recuadro destacado" aria-label="Recuadro destacado"><svg class="ico"><use href="#i-recuadro"/></svg><svg class="ico ico-mini"><use href="#i-flecha"/></svg></button>
+              <div class="menu" id="menuRecuadro" role="menu" hidden>
+                <button type="button" role="menuitem" data-formato="nota"><span class="muestra-recuadro r-nota"></span><span>Nota<small>Información adicional</small></span><kbd>&gt;</kbd></button>
+                <button type="button" role="menuitem" data-formato="aviso"><span class="muestra-recuadro r-aviso"></span><span>Aviso<small>Algo a tener en cuenta</small></span><kbd>!</kbd></button>
+                <button type="button" role="menuitem" data-formato="critico"><span class="muestra-recuadro r-critico"></span><span>Crítico<small>Afectación o urgencia</small></span><kbd>!!</kbd></button>
+                <button type="button" role="menuitem" data-formato="exito"><span class="muestra-recuadro r-exito"></span><span>Éxito<small>Servicio restablecido</small></span><kbd>✓</kbd></button>
               </div>
             </div>
           </div>
+          <div class="grupo-herr">
+            <button type="button" data-formato="enlace" data-tip="Enlace · Ctrl+K" aria-label="Enlace"><svg class="ico"><use href="#i-enlace"/></svg></button>
+            <button type="button" data-accion="elegir-imagen" data-tip="Imagen · también Ctrl+V" aria-label="Imagen"><svg class="ico"><use href="#i-imagen"/></svg></button>
+            <div class="envoltura-menu">
+              <button type="button" data-menu="menuTabla" aria-haspopup="menu" aria-expanded="false" data-tip="Tabla" aria-label="Tabla"><svg class="ico"><use href="#i-tabla"/></svg><svg class="ico ico-mini"><use href="#i-flecha"/></svg></button>
+              <div class="menu" id="menuTabla" role="menu" hidden>
+                <button type="button" role="menuitem" data-formato="tabla-detalle"><svg class="ico"><use href="#i-tabla"/></svg><span>Ficha de detalle<small>Detalle · Información</small></span></button>
+                <button type="button" role="menuitem" data-formato="tabla-2"><svg class="ico"><use href="#i-tabla"/></svg><span>2 columnas</span></button>
+                <button type="button" role="menuitem" data-formato="tabla-3"><svg class="ico"><use href="#i-tabla"/></svg><span>3 columnas</span></button>
+                <button type="button" role="menuitem" data-formato="tabla-4"><svg class="ico"><use href="#i-tabla"/></svg><span>4 columnas</span></button>
+                <p class="menu-nota">También puedes pegar una tabla copiada de Excel.</p>
+              </div>
+            </div>
+            <button type="button" data-formato="boton" data-tip="Botón con enlace" aria-label="Botón"><svg class="ico"><use href="#i-boton"/></svg></button>
+            <button type="button" data-formato="separador" data-tip="Línea separadora" aria-label="Separador"><svg class="ico"><use href="#i-separador"/></svg></button>
+          </div>
+          <div class="grupo-herr">
+            <div class="envoltura-menu">
+              <button type="button" class="boton-variable" data-menu="menuVariable" aria-haspopup="menu" aria-expanded="false" data-tip="Insertar variable"><svg class="ico"><use href="#i-variable"/></svg><span>Variable</span><svg class="ico ico-mini"><use href="#i-flecha"/></svg></button>
+              <div class="menu a-la-derecha" id="menuVariable" role="menu" hidden>
+                <button type="button" role="menuitem" data-formato="variable"><code>{{ }}</code><span>Obligatoria<small>Se resalta si falta</small></span></button>
+                <button type="button" role="menuitem" data-formato="variable-opcional"><code>{{ ?}}</code><span>Opcional<small>Vacía, se quita su línea</small></span></button>
+                <button type="button" role="menuitem" data-formato="variable-opciones"><code>{{ | ; }}</code><span>Con opciones<small>Se elige con un clic</small></span></button>
+                <hr>
+                <button type="button" role="menuitem" data-formato="variable-hoy"><code>{{hoy}}</code><span>Fecha larga</span></button>
+                <button type="button" role="menuitem" data-formato="variable-fecha"><code>{{fecha}}</code><span>Fecha corta</span></button>
+                <button type="button" role="menuitem" data-formato="variable-hora"><code>{{hora}}</code><span>Hora actual</span></button>
+              </div>
+            </div>
+            <button type="button" data-formato="quitar-formato" data-tip="Quitar formato" aria-label="Quitar formato"><svg class="ico"><use href="#i-limpiar"/></svg></button>
+          </div>
         </div>
-        <div class="grupo">
-          <div class="grupo-cabecera"><h2>Página</h2></div>
+
+        <div class="hoja-cuerpo" id="hojaCuerpo">
+          <textarea id="texto" data-campo="texto" spellcheck="true" aria-label="Mensaje" placeholder="Escribe o pega el contenido del correo…&#10;&#10;Pega capturas con Ctrl+V, tablas desde Excel, o elige una plantilla."></textarea>
+          <div class="soltar" aria-hidden="true"><svg class="ico"><use href="#i-imagen"/></svg>Suelta la imagen para insertarla</div>
+        </div>
+
+        <div class="tira-imagenes" id="tiraImagenes" hidden></div>
+
+        <footer class="hoja-estado">
+          <span id="estadoTexto"></span>
+          <span class="estado-sep" aria-hidden="true"></span>
+          <span class="estado-ayuda"><kbd>Ctrl</kbd>+<kbd>V</kbd> pega imágenes · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> copia el correo</span>
+          <button type="button" class="boton-texto" data-accion="guia"><svg class="ico ico-chico"><use href="#i-ayuda"/></svg>Guía de formato</button>
+        </footer>
+        <input type="file" id="archivoImagen" accept="image/*" multiple hidden>
+      </section>
+
+      <aside class="lateral lateral-variables" aria-label="Variables">
+        <div class="lateral-cabecera">
+          <h2>Datos del correo</h2>
+          <button type="button" class="boton-texto" data-accion="vaciar-variables" id="vaciarVariables" hidden>Vaciar</button>
+        </div>
+        <div class="progreso" id="progresoVariables" hidden>
+          <div class="progreso-barra"><span id="progresoRelleno"></span></div>
+          <span id="conteoVariables"></span>
+        </div>
+        <div id="variables" class="lista-variables"></div>
+        <div class="vacio-variables" id="sinVariables">
+          <svg class="ico"><use href="#i-variable"/></svg>
+          <p><strong>Sin variables</strong></p>
+          <p>Elige una plantilla o escribe <code>{{Nombre}}</code> en el mensaje: aparecerá aquí como campo para completar.</p>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ═══════════════ DISEÑAR ═══════════════ -->
+    <section class="vista vista-disenar" id="vista-disenar" role="tabpanel" aria-labelledby="tab-disenar" data-vista="disenar" hidden>
+      <div class="escenario">
+        <div class="escenario-barra">
+          <div class="segmentado" role="group" aria-label="Tamaño de la vista previa">
+            <button type="button" data-dispositivo="escritorio" aria-pressed="true"><svg class="ico"><use href="#i-escritorio"/></svg>Escritorio</button>
+            <button type="button" data-dispositivo="movil" aria-pressed="false"><svg class="ico"><use href="#i-movil"/></svg>Móvil</button>
+          </div>
+          <button type="button" class="aviso-variables" id="avisoVariables" hidden></button>
+          <span class="escenario-ayuda">Así se verá al pegarlo en Outlook</span>
+        </div>
+        <div class="lienzo">
+          <div class="marco" id="marco">
+            <div class="marco-cabecera" aria-hidden="true"><i></i><i></i><i></i><span id="marcoAsunto"></span></div>
+            <iframe id="vistaPrevia" title="Vista previa del correo" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <aside class="lateral lateral-diseno" aria-label="Diseño">
+        <details class="seccion" open>
+          <summary>Estilo</summary>
+          <div class="disenos" id="disenos" role="radiogroup" aria-label="Estilo del correo"></div>
+        </details>
+        <details class="seccion" open>
+          <summary>Color principal</summary>
+          <div class="paleta" id="paleta" role="radiogroup" aria-label="Color principal"></div>
+        </details>
+        <details class="seccion" open>
+          <summary>Tipografía</summary>
+          <label class="campo"><span>Fuente</span><select data-campo="ajustes.fuente" id="fuente"></select></label>
+          <div class="campo">
+            <span>Tamaño del texto</span>
+            <div class="segmentado segmentado-lleno" role="radiogroup" aria-label="Tamaño del texto">
+              <label><input type="radio" name="tamano" value="13" data-campo="ajustes.tamano" data-numero><span>13</span></label>
+              <label><input type="radio" name="tamano" value="14" data-campo="ajustes.tamano" data-numero><span>14</span></label>
+              <label><input type="radio" name="tamano" value="15" data-campo="ajustes.tamano" data-numero><span>15</span></label>
+              <label><input type="radio" name="tamano" value="16" data-campo="ajustes.tamano" data-numero><span>16</span></label>
+            </div>
+          </div>
+        </details>
+        <details class="seccion">
+          <summary>Página</summary>
           <label class="campo">
             <span>Ancho máximo <output id="anchoValor"></output></span>
             <input type="range" min="520" max="760" step="20" data-campo="ajustes.ancho" data-numero>
           </label>
-          <label class="interruptor interruptor-fila"><input type="checkbox" data-campo="ajustes.fondo"><span aria-hidden="true"></span>Fondo gris alrededor del correo</label>
-          <label class="campo"><span>Logo (URL de una imagen, opcional)</span><input type="url" data-campo="ajustes.logo" placeholder="https://tu-empresa.com/logo.png"></label>
-          <p class="ayuda">El logo debe estar publicado en internet para que se vea en el correo de quien lo recibe.</p>
-        </div>
-      </div>
-
-      <!-- Firma y pie -->
-      <div class="pestana-panel" role="tabpanel" id="panel-firma" aria-labelledby="tab-firma" data-panel="firma" hidden>
-        <div class="grupo">
-          <div class="grupo-cabecera">
-            <h2>Firma</h2>
-            <label class="interruptor"><input type="checkbox" data-campo="firma.mostrar"><span aria-hidden="true"></span>Mostrar</label>
-          </div>
+          <label class="interruptor"><input type="checkbox" data-campo="ajustes.fondo"><span aria-hidden="true"></span>Fondo alrededor del correo</label>
+        </details>
+        <details class="seccion">
+          <summary>Encabezado y logo</summary>
+          <label class="interruptor"><input type="checkbox" data-campo="encabezado.mostrar"><span aria-hidden="true"></span>Mostrar encabezado</label>
+          <label class="campo"><span>Logo (URL de una imagen publicada)</span><input type="url" data-campo="ajustes.logo" placeholder="https://tu-empresa.com/logo.png"></label>
+          <p class="ayuda">El título y el subtítulo se escriben en <a href="#" data-vista-app="redactar">Redactar</a>.</p>
+        </details>
+        <details class="seccion">
+          <summary>Firma</summary>
+          <label class="interruptor"><input type="checkbox" data-campo="firma.mostrar"><span aria-hidden="true"></span>Incluir firma</label>
           <div data-depende="firma.mostrar">
             <label class="campo"><span>Despedida</span><input type="text" data-campo="firma.despedida" placeholder="Saludos cordiales,"></label>
             <div class="campos-2">
@@ -205,45 +309,74 @@
               <label class="campo"><span>Sitio web</span><input type="text" data-campo="firma.web" placeholder="www.empresa.com"></label>
             </div>
           </div>
-        </div>
-        <div class="grupo">
-          <div class="grupo-cabecera">
-            <h2>Pie del correo</h2>
-            <label class="interruptor"><input type="checkbox" data-campo="pie.mostrar"><span aria-hidden="true"></span>Mostrar</label>
-          </div>
+        </details>
+        <details class="seccion">
+          <summary>Pie del correo</summary>
+          <label class="interruptor"><input type="checkbox" data-campo="pie.mostrar"><span aria-hidden="true"></span>Incluir pie</label>
           <label class="campo" data-depende="pie.mostrar"><span>Texto</span><textarea rows="3" data-campo="pie.texto" placeholder="Aviso de confidencialidad, dirección, etc."></textarea></label>
-        </div>
-        <p class="ayuda">La firma, el diseño y tus plantillas se guardan solo en este navegador.</p>
-      </div>
-    </section>
-
-    <section class="panel panel-vista" aria-label="Vista previa">
-      <div class="vista-barra">
-        <h2>Vista previa</h2>
-        <button type="button" class="aviso-variables" id="avisoVariables" hidden></button>
-        <div class="segmentado segmentado-chico" role="group" aria-label="Ancho de la vista previa">
-          <button type="button" data-vista="escritorio" aria-pressed="true">Escritorio</button>
-          <button type="button" data-vista="movil" aria-pressed="false">Móvil</button>
-        </div>
-      </div>
-      <div class="vista-lienzo">
-        <div class="vista-marco" id="marco">
-          <iframe id="vistaPrevia" title="Vista previa del correo" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
-        </div>
-      </div>
-      <div class="vista-pie">
-        <span>Pega el resultado en Outlook, Gmail o Word con <kbd>Ctrl</kbd>+<kbd>V</kbd>.</span>
-        <button type="button" class="boton boton-primario" data-accion="copiar">Copiar correo</button>
-      </div>
+        </details>
+        <p class="ayuda ayuda-final">El diseño, la firma y tus plantillas se guardan solo en este navegador.</p>
+      </aside>
     </section>
   </main>
 
-  <dialog id="dialogoPlantilla" class="dialogo">
+  <!-- Guía de formato -->
+  <dialog id="dialogoGuia" class="dialogo dialogo-ancho" aria-labelledby="guiaTitulo">
+    <div class="dialogo-cabecera">
+      <h2 id="guiaTitulo">Guía de formato</h2>
+      <form method="dialog"><button class="boton-icono" aria-label="Cerrar"><svg class="ico"><use href="#i-cerrar"/></svg></button></form>
+    </div>
+    <p class="ayuda">Usa la barra de herramientas o escribe estas marcas directamente.</p>
+    <div class="guia-rejilla">
+      <section>
+        <h3>Texto</h3>
+        <dl>
+          <dt><code># Título</code> <code>## Sección</code> <code>### Rótulo</code></dt><dd>Títulos</dd>
+          <dt><code>**negrita**</code> <code>*cursiva*</code> <code>++subrayado++</code></dt><dd>Énfasis</dd>
+          <dt><code>==resaltado==</code> <code>~~tachado~~</code></dt><dd>Marcas</dd>
+          <dt><code>- punto</code> <code>1. paso</code></dt><dd>Listas</dd>
+          <dt><code>[texto](https://…)</code></dt><dd>Enlace</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>Bloques</h3>
+        <dl>
+          <dt><code>&gt; nota</code> <code>! aviso</code></dt><dd>Recuadros</dd>
+          <dt><code>!! crítico</code> <code>✓ éxito</code></dt><dd>Recuadros de estado</dd>
+          <dt><code>| A | B |</code> + <code>|---|---|</code></dt><dd>Tabla (o pégala de Excel)</dd>
+          <dt><code>[[Texto|https://…]]</code></dt><dd>Botón</dd>
+          <dt><code>---</code></dt><dd>Separador</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>Imágenes</h3>
+        <dl>
+          <dt><kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastrar</dt><dd>Inserta una captura</dd>
+          <dt><code>![Pie de foto](…)</code></dt><dd>Texto bajo la imagen</dd>
+          <dt><code>![Pie|50%](…)</code> <code>![Pie|300](…)</code></dt><dd>Ancho en % o px</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>Variables</h3>
+        <dl>
+          <dt><code>{{Nombre}}</code></dt><dd>Obligatoria, se resalta si falta</dd>
+          <dt><code>{{Nombre?}}</code></dt><dd>Opcional: vacía, se quita su línea (y su sección si queda vacía)</dd>
+          <dt><code>{{Nombre|valor}}</code></dt><dd>Con valor predeterminado</dd>
+          <dt><code>{{Área|CORE IP;TX}}</code></dt><dd>Opciones para elegir</dd>
+          <dt><code>{{hoy}}</code> <code>{{fecha}}</code> <code>{{hora}}</code></dt><dd>Automáticas</dd>
+        </dl>
+      </section>
+    </div>
+  </dialog>
+
+  <!-- Guardar plantilla -->
+  <dialog id="dialogoPlantilla" class="dialogo" aria-labelledby="plantillaTitulo">
     <form method="dialog">
-      <h2>Guardar como plantilla</h2>
-      <p class="ayuda">Se guarda el título, el subtítulo y el mensaje actuales, con sus variables.</p>
+      <h2 id="plantillaTitulo">Guardar como plantilla</h2>
+      <p class="ayuda">Se guardan el título, el subtítulo y el mensaje actuales, con sus variables. Si usas un nombre existente, se actualiza.</p>
       <label class="campo"><span>Nombre</span><input type="text" name="nombre" required maxlength="80" placeholder="Ej. Reporte diario"></label>
-      <label class="campo"><span>Categoría</span><input type="text" name="categoria" maxlength="40" placeholder="Ej. Operaciones"></label>
+      <label class="campo"><span>Categoría</span><input type="text" name="categoria" maxlength="40" placeholder="Ej. Escalamientos" list="categoriasPlantilla"></label>
+      <datalist id="categoriasPlantilla"></datalist>
       <div class="dialogo-acciones">
         <button type="submit" value="cancelar" class="boton boton-fantasma" formnovalidate>Cancelar</button>
         <button type="submit" value="guardar" class="boton boton-primario">Guardar</button>
@@ -252,20 +385,14 @@
   </dialog>
 
   <template id="tplPlantilla">
-    <article class="tarjeta-plantilla">
-      <div class="tp-cabecera">
-        <h3 class="tp-nombre"></h3>
-        <span class="tp-categoria"></span>
-      </div>
-      <p class="tp-descripcion"></p>
-      <div class="tp-pie">
-        <span class="tp-variables"></span>
-        <div class="tp-acciones">
-          <button type="button" class="boton-texto peligro tp-eliminar" hidden>Eliminar</button>
-          <button type="button" class="boton boton-secundario tp-usar">Usar</button>
-        </div>
-      </div>
-    </article>
+    <div class="item-plantilla">
+      <button type="button" class="ip-usar">
+        <span class="ip-nombre"></span>
+        <span class="ip-descripcion"></span>
+        <span class="ip-meta"></span>
+      </button>
+      <button type="button" class="boton-icono ip-eliminar" aria-label="Eliminar plantilla" hidden><svg class="ico"><use href="#i-basura"/></svg></button>
+    </div>
   </template>
 </body>
 </html>
