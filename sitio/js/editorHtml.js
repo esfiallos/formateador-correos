@@ -3,7 +3,20 @@
 // Todo texto de la persona se escapa; las variables se vuelven «chips» no editables.
 
 import { fuenteDeImagen } from './correo.js';
-import { analizarBloques, describirVariable, escaparHtml, patronVariable, urlSegura, VARIABLES_AUTOMATICAS } from './formato.js';
+import { LENGUAJES } from './correo.js';
+import {
+  analizarBloques,
+  describirVariable,
+  escaparHtml,
+  leerPildora,
+  patronPildora,
+  patronVariable,
+  urlSegura,
+  VARIABLES_AUTOMATICAS,
+} from './formato.js';
+
+/** Nombre visible del equipo de un bloque de comandos. */
+export const nombreDeLenguaje = (l) => LENGUAJES[l]?.nombre ?? (l ? l.toUpperCase() : 'Comandos');
 
 const FICHA = '\u0002';
 
@@ -44,10 +57,22 @@ function enfasisSemantico(s) {
 }
 
 /** Una línea con marcas → HTML del editor (negritas, enlaces, chips). */
+export function pildoraEditableHtml(md, ctx = {}) {
+  const contenido = md.replace(/^\(\(|\)\)$/g, '');
+  const { color, texto } = leerPildora(contenido);
+  // El texto puede llevar datos ((({{Estado}})): se muestran como chips dentro de la píldora.
+  const interior = String(texto).replace(patronVariable(), (m) => `\u0003${m}\u0003`);
+  const html = escaparHtml(interior).replace(/\u0003([^\u0003]+)\u0003/g, (_, m) => chipHtml(m.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'), ctx));
+  return `<span class="pildora pildora-${color}" contenteditable="false" data-md="${escaparHtml(md)}" title="Doble clic para editar">${html}</span>`;
+}
+
 export function enLineaEditable(texto, ctx = {}) {
   const fichas = [];
   const guardar = (html) => `${FICHA}${fichas.push(html) - 1}${FICHA}`;
-  let s = String(texto ?? '').replace(patronVariable(), (m) => guardar(chipHtml(m, ctx)));
+  let s = String(texto ?? '');
+  s = s.replace(/`([^`\n]+)`/g, (_, codigo) => guardar(`<code>${escaparHtml(codigo)}</code>`));
+  s = s.replace(patronPildora(), (m) => guardar(pildoraEditableHtml(m, ctx)));
+  s = s.replace(patronVariable(), (m) => guardar(chipHtml(m, ctx)));
   s = escaparHtml(s);
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (todo, rotulo, url) => {
     const segura = urlSegura(url);
@@ -89,6 +114,26 @@ function botonEditable(b) {
   );
 }
 
+function progresoEditable(b, il) {
+  const md = `%% ${b.valor}${b.texto ? ` | ${b.texto}` : ''}`;
+  return (
+    `<div class="bloque-fijo bloque-progreso" contenteditable="false" data-md="${atributo(md)}">` +
+    `<div class="bp-cabecera"><span>${il(b.texto) || '&nbsp;'}</span><strong>${b.valor}%</strong></div>` +
+    `<div class="bp-barra${b.valor >= 100 ? ' completa' : ''}"><span style="width:${b.valor}%"></span></div>` +
+    `<span class="controles-bloque"><button type="button" data-bloque="editar-progreso">Editar</button>` +
+    `<button type="button" data-bloque="quitar" aria-label="Quitar">✕</button></span></div>`
+  );
+}
+
+/** Bloque de comandos editable: el texto va tal cual; la etiqueta del equipo no es parte del texto. */
+export function codigoEditable(b) {
+  return (
+    `<pre class="bloque-codigo" data-lenguaje="${atributo(b.lenguaje ?? '')}">` +
+    `<span class="etiqueta-codigo" contenteditable="false" data-bloque="lenguaje" title="Cambiar el equipo">${escaparHtml(nombreDeLenguaje(b.lenguaje))}</span>` +
+    `${escaparHtml(b.lineas.join('\n'))}\n</pre>`
+  );
+}
+
 /** Texto completo → HTML del editor visual. */
 export function mdAEditable(texto, ctx = {}) {
   const il = (s) => enLineaEditable(s, ctx);
@@ -117,6 +162,16 @@ export function mdAEditable(texto, ctx = {}) {
           return imagenEditable(b, ctx);
         case 'separador':
           return '<hr>';
+        case 'linea':
+          return `<table class="linea-tiempo"><tbody>${b.items
+            .map((it) => `<tr><td class="lt-hora">${il(it.hora) || '<br>'}</td><td class="lt-texto">${il(it.texto) || '<br>'}</td></tr>`)
+            .join('')}</tbody></table>`;
+        case 'progreso':
+          return progresoEditable(b, il);
+        case 'cita':
+          return `<blockquote>${b.lineas.map(il).join('<br>')}</blockquote>`;
+        case 'codigo':
+          return codigoEditable(b);
         default:
           return '';
       }

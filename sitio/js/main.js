@@ -1,14 +1,14 @@
 // Interfaz: dos vistas (Redactar · Diseñar), campos enlazados al estado, vista previa y copia.
 
 import { construirCorreo, documentoCompleto, DISENOS, estadoPredeterminado, FUENTES, PALETA, colorValido } from './correo.js';
-import { analizarBloques, describirVariable, detectarVariables, patronVariable, textoPlanoEnLinea, tokenDeVariable } from './formato.js';
+import { analizarBloques, COLORES_PILDORA, describirVariable, leerPildora, detectarVariables, patronVariable, textoPlanoEnLinea, tokenDeVariable } from './formato.js';
 import { EJEMPLO_INICIAL, PLANTILLAS } from './plantillas.js';
 import { guardar, leer } from './almacen.js';
 import { copiarConFormato, copiarTexto } from './portapapeles.js';
 import { aviso } from './aviso.js';
 import { enlazarMenus, estiloDeLinea, FORMATOS, insertarBloque } from './editor.js';
 import { esImagen, imagenesUsadas, procesarImagen } from './imagenes.js';
-import { aplicarComandoVisual, celdaActual, chipHtml, crearEditorVisual, estadoDeLaBarra, mdAEditable, operarTabla, rangoDentro } from './visual.js';
+import { aplicarComandoVisual, cambiarLenguaje, celdaActual, chipHtml, crearEditorVisual, estadoDeLaBarra, mdAEditable, operarTabla, pildoraEditableHtml, rangoDentro } from './visual.js';
 import { pedirDatos } from './dialogos.js';
 
 const CLAVES = {
@@ -580,12 +580,18 @@ async function insertarBoton(editor, nodo = null) {
 }
 
 async function accionDeBloque(boton) {
+  if (boton.dataset.bloque === 'lenguaje') return elegirLenguaje(boton.closest('pre'));
   const nodo = boton.closest('.bloque-fijo');
   const editor = editores.find((e) => e.el.contains(nodo));
   if (!nodo || !editor) return;
   const accion = boton.dataset.bloque;
   if (accion === 'quitar') return editor.quitarNodo(nodo);
   if (accion === 'editar-boton') return insertarBoton(editor, nodo);
+  if (accion === 'editar-progreso') {
+    const md = await pedirProgreso(nodo.dataset.md);
+    if (md) editor.reemplazarNodo(nodo, mdAEditable(md, contextoEditor()));
+    return;
+  }
   const m = /^!\[([^\]]*)\]\(([^)\s]+)\)$/.exec(nodo.dataset.md ?? '');
   if (!m) return;
   let [pie, ancho] = m[1].split('|');
@@ -626,6 +632,90 @@ async function insertarImagenes(archivos) {
   return true;
 }
 
+// ───────────────────────── Píldoras, progreso y comandos ─────────────────────────
+
+const OPCIONES_COLOR_PILDORA = [
+  { valor: '', etiqueta: 'Automático', ayuda: 'Según el texto: Resuelto → verde, Caído → rojo, En revisión → ámbar' },
+  ...Object.entries(COLORES_PILDORA).map(([valor, c]) => ({ valor, etiqueta: c.nombre })),
+];
+
+async function pedirPildora(editor, previo = null) {
+  const actual = previo ? leerPildora(previo.replace(/^\(\(|\)\)$/g, '')) : null;
+  const datos = await conSeleccion(editor, (seleccion) =>
+    pedirDatos({
+      titulo: previo ? 'Editar etiqueta de estado' : 'Insertar etiqueta de estado',
+      descripcion: 'Una etiqueta destaca un estado dentro del texto o de una tabla (Resuelto, En revisión, Crítico…).',
+      aceptar: previo ? 'Guardar' : 'Insertar',
+      campos: [
+        { nombre: 'texto', etiqueta: 'Texto', valor: actual?.texto ?? seleccion.trim(), requerido: true, placeholder: 'Ej. Resuelto', sugerencias: ['Resuelto', 'En revisión', 'Pendiente', 'Escalado', 'Crítico', 'Operativo', 'Informativo'] },
+        { nombre: 'color', etiqueta: 'Color', tipo: 'elegir', valor: actual?.explicito ? actual.color : '', opciones: OPCIONES_COLOR_PILDORA },
+      ],
+    }),
+  );
+  if (!datos?.texto) return null;
+  const texto = datos.texto.replace(/[()]/g, '').trim();
+  return `((${datos.color ? `${datos.color}:` : ''}${texto}))`;
+}
+
+async function insertarPildora(editor) {
+  const md = await pedirPildora(editor);
+  if (md) editor.insertarHtml(`${pildoraEditableHtml(md, contextoEditor())}&nbsp;`);
+}
+
+async function editarPildora(pildora) {
+  const editor = editores.find((e) => e.el.contains(pildora));
+  if (!editor) return;
+  const md = await pedirPildora(editor, pildora.dataset.md ?? '');
+  if (md) editor.reemplazarNodo(pildora, pildoraEditableHtml(md, contextoEditor()));
+}
+
+async function pedirProgreso(previo = null) {
+  const m = previo ? /^%%\s*(\d{1,3})\s*%?\s*(?:\|\s*(.*))?$/.exec(previo) : null;
+  const datos = await pedirDatos({
+    titulo: previo ? 'Editar barra de progreso' : 'Insertar barra de progreso',
+    descripcion: 'Muestra el avance de una tarea (migración, mantenimiento, despliegue…).',
+    aceptar: previo ? 'Guardar' : 'Insertar',
+    campos: [
+      { nombre: 'texto', etiqueta: 'Descripción', valor: m?.[2] ?? '', placeholder: 'Ej. Avance de la migración' },
+      { nombre: 'valor', etiqueta: 'Porcentaje (0 a 100)', valor: m?.[1] ?? '50', requerido: true, placeholder: '50' },
+    ],
+  });
+  if (!datos) return null;
+  const valor = Math.min(100, Math.max(0, Math.round(Number(String(datos.valor).replace(/[^\d.]/g, '')) || 0)));
+  return `%% ${valor}${datos.texto ? ` | ${datos.texto.replace(/\n/g, ' ')}` : ''}`;
+}
+
+async function insertarProgreso(editor) {
+  const md = await conSeleccion(editor, () => pedirProgreso());
+  if (md) editor.insertarHtml(`${mdAEditable(md, contextoEditor())}<p><br></p>`);
+}
+
+async function elegirLenguaje(pre) {
+  const editor = editores.find((e) => e.el.contains(pre));
+  if (!editor) return;
+  const datos = await pedirDatos({
+    titulo: 'Equipo de los comandos',
+    descripcion: 'Define cómo se resalta el prompt y la etiqueta del bloque.',
+    aceptar: 'Aplicar',
+    campos: [
+      {
+        nombre: 'lenguaje',
+        etiqueta: 'Equipo',
+        tipo: 'elegir',
+        valor: pre.dataset.lenguaje ?? '',
+        opciones: [
+          { valor: 'cisco', etiqueta: 'Cisco IOS', ayuda: 'Router#  ·  Switch(config-if)#' },
+          { valor: 'huawei', etiqueta: 'Huawei VRP', ayuda: '<HUAWEI>  ·  [HUAWEI-GigabitEthernet0/0/1]' },
+          { valor: 'mikrotik', etiqueta: 'MikroTik RouterOS', ayuda: '[admin@MikroTik] /ip address>' },
+          { valor: 'linux', etiqueta: 'Linux', ayuda: 'usuario@servidor:~$  ·  #' },
+          { valor: '', etiqueta: 'Genérico', ayuda: 'Sin resaltado de prompt' },
+        ],
+      },
+    ],
+  });
+  if (datos) cambiarLenguaje(editor, pre, datos.lenguaje);
+}
+
 async function aplicarFormato(nombre) {
   if (modoEditor === 'codigo' && editorActivo === editorCuerpo) {
     FORMATOS[nombre]?.(textoArea);
@@ -634,6 +724,8 @@ async function aplicarFormato(nombre) {
   const editor = editorActivo;
   if (aplicarComandoVisual(editor, nombre)) return;
   if (nombre === 'enlace') return insertarEnlace(editor);
+  if (nombre === 'pildora') return insertarPildora(editor);
+  if (nombre === 'progreso' && !editor.unaLinea) return insertarProgreso(editor);
   if (nombre === 'boton' && !editor.unaLinea) return insertarBoton(editor);
   const automaticas = { 'variable-hoy': '{{hoy}}', 'variable-fecha': '{{fecha}}', 'variable-hora': '{{hora}}' };
   if (automaticas[nombre]) return editor.insertarHtml(`${chipHtml(automaticas[nombre], contextoEditor())}&nbsp;`);
@@ -1170,6 +1262,8 @@ function pintarBarraDeTabla() {
   }
   const tabla = celda.closest('table');
   barra.hidden = false;
+  // En la línea de tiempo solo se agregan o quitan filas (siempre son dos columnas).
+  barra.classList.toggle('solo-filas', tabla.classList.contains('linea-tiempo'));
   const documento = editorCuerpo.el;
   const arriba = documento.offsetTop + tabla.offsetTop - barra.offsetHeight - 8;
   barra.style.top = `${Math.max(4, arriba)}px`;
@@ -1218,6 +1312,12 @@ function enlazarEventos() {
     if (chipVar) {
       e.preventDefault();
       editarChip(chipVar);
+      return;
+    }
+    const pildora = e.target.closest('.pildora');
+    if (pildora && editores.some((ed) => ed.el.contains(pildora))) {
+      e.preventDefault();
+      editarPildora(pildora);
     }
   });
 

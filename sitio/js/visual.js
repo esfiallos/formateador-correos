@@ -2,7 +2,7 @@
 // Por dentro el correo sigue guardándose como texto con marcas (estado.texto), así funcionan
 // plantillas, variables y vista previa; este módulo convierte HTML del editor ↔ texto.
 
-import { chipHtml, enLineaEditable, marcaDeRecuadro, mdAEditable, textoDeChip } from './editorHtml.js';
+import { chipHtml, codigoEditable, enLineaEditable, marcaDeRecuadro, mdAEditable, nombreDeLenguaje, pildoraEditableHtml, textoDeChip } from './editorHtml.js';
 import { analizarBloques, urlSegura, escaparHtml } from './formato.js';
 
 const BLOQUES = new Set([
@@ -41,11 +41,16 @@ export function enLinea(nodo) {
       continue;
     }
     if (n.nodeType !== 1) continue;
-    if (n.classList.contains('chip-var')) {
+    if (n.classList.contains('chip-var') || n.classList.contains('pildora')) {
       s += n.dataset.md ?? '';
       continue;
     }
-    if (n.classList.contains('controles-bloque') || IGNORAR.has(n.tagName)) continue;
+    if (n.classList.contains('controles-bloque') || n.classList.contains('etiqueta-codigo') || IGNORAR.has(n.tagName)) continue;
+    if (n.tagName === 'CODE' && !n.closest('pre')) {
+      const codigo = n.textContent.replace(/ /g, ' ').replace(/`/g, "'").trim();
+      if (codigo) s += `\`${codigo}\``;
+      continue;
+    }
     if (n.tagName === 'BR') {
       s += '\n';
       continue;
@@ -127,6 +132,21 @@ function tabla(t) {
   return lineas.join('\n');
 }
 
+/** Texto de un <pre> respetando saltos (<br>, bloques) y sin la etiqueta del equipo. */
+function textoDePre(nodo) {
+  let s = '';
+  for (const n of nodo.childNodes) {
+    if (n.nodeType === 3) s += n.data.replace(/ /g, ' ').replace(/​/g, '');
+    else if (n.nodeType === 1) {
+      if (n.classList.contains('etiqueta-codigo') || n.classList.contains('controles-bloque')) continue;
+      if (n.tagName === 'BR') s += '\n';
+      else if (BLOQUES.has(n.tagName)) s += `${s && !s.endsWith('\n') ? '\n' : ''}${textoDePre(n)}\n`;
+      else s += textoDePre(n);
+    }
+  }
+  return s;
+}
+
 const tieneHijosDeBloque = (n) => [...n.children].some((c) => BLOQUES.has(c.tagName) || c.classList.contains('bloque-fijo'));
 
 function bloque(n) {
@@ -147,16 +167,27 @@ function bloque(n) {
       return { md: lista(n, n.tagName === 'OL') };
     case 'ASIDE':
     case 'BLOCKQUOTE': {
-      const variante = n.dataset.recuadro || 'info';
+      // <blockquote> es una cita (>>); <aside> es un recuadro de color (> ! !! ✓).
+      const variante = n.tagName === 'BLOCKQUOTE' ? 'cita' : n.dataset.recuadro || 'info';
+      const marca = variante === 'cita' ? '>> ' : marcaDeRecuadro(variante);
       const lineas = limpiarLineas(enLinea(n)).split('\n').filter((l) => l.trim());
-      return { md: lineas.map((l) => marcaDeRecuadro(variante) + l).join('\n'), recuadro: variante };
+      return { md: lineas.map((l) => marca + l).join('\n'), recuadro: variante };
     }
     case 'TABLE':
+      if (n.classList.contains('linea-tiempo')) {
+        const items = [...n.rows].map((r) => {
+          const [hora, texto] = [...r.cells].map((c) => limpiarLineas(enLinea(c)).replace(/\n+/g, ' ').replace(/\|/g, '\\|').trim());
+          return hora || texto ? `@ ${hora ? `${hora} | ` : ''}${texto ?? ''}` : '';
+        });
+        return { md: items.filter(Boolean).join('\n') };
+      }
       return { md: tabla(n) };
     case 'HR':
       return { md: '---' };
-    case 'PRE':
-      return { md: n.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '') };
+    case 'PRE': {
+      const contenido = textoDePre(n).replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, '');
+      return { md: `\`\`\`${n.dataset.lenguaje ?? ''}\n${contenido.replace(/^```/gm, "'''")}\n\`\`\`` };
+    }
     default:
       if (tieneHijosDeBloque(n)) return { md: serializar(n) };
       return { md: limpiarLineas(enLinea(n)) };
@@ -304,6 +335,35 @@ export function crearEditorVisual(el, { contexto, alCambiar, unaLinea = false, a
     } else if (bloques.length) insertarHtml(mdAEditable(md, contexto()));
   }
 
+  /** <pre> (bloque de comandos) donde está el cursor. */
+  const preActual = () => {
+    const n = rangoDentro(el)?.startContainer;
+    const pre = (n?.nodeType === 3 ? n.parentElement : n)?.closest?.('pre');
+    return pre && el.contains(pre) ? pre : null;
+  };
+
+  /** Dentro de un bloque de comandos todo es texto literal: saltos y espacios incluidos. */
+  function insertarEnPre(pre, texto) {
+    const rango = rangoDentro(el);
+    if (!rango) return;
+    rango.deleteContents();
+    const nodo = document.createTextNode(texto);
+    rango.insertNode(nodo);
+    // Al final del bloque el navegador no muestra una línea vacía nueva: se deja un salto de reserva.
+    const resto = document.createRange();
+    resto.setStartAfter(nodo);
+    resto.setEnd(pre, pre.childNodes.length);
+    if (texto.endsWith('\n') && !resto.toString().length) nodo.after(document.createTextNode('\n'));
+    const cursor = document.createRange();
+    cursor.setStartAfter(nodo);
+    cursor.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(cursor);
+    pre.normalize();
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   el.addEventListener('paste', (e) => {
     const datos = e.clipboardData;
     if (!datos) return;
@@ -311,6 +371,11 @@ export function crearEditorVisual(el, { contexto, alCambiar, unaLinea = false, a
     const texto = datos.getData('text/plain');
     const html = datos.getData('text/html');
     e.preventDefault();
+    const pre = preActual();
+    if (pre) {
+      insertarEnPre(pre, texto.replace(/\r\n?/g, '\n'));
+      return;
+    }
     if (archivos.length && !texto.trim()) {
       if (!unaLinea) alPegarImagenes?.(archivos);
       return;
@@ -335,17 +400,22 @@ export function crearEditorVisual(el, { contexto, alCambiar, unaLinea = false, a
       e.preventDefault();
       return;
     }
+    const pre = !unaLinea && preActual();
+    if (pre && (e.key === 'Enter' || e.key === 'Tab') && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      insertarEnPre(pre, e.key === 'Enter' ? '\n' : '    ');
+      return;
+    }
     // Tab en tablas: siguiente celda (y fila nueva al final).
     if (e.key === 'Tab' && !unaLinea) {
-      const celda = rangoDentro(el)?.startContainer?.parentElement?.closest?.('td, th');
-      if (!celda || !el.contains(celda)) return;
+      const celda = celdaActual(el);
+      if (!celda) return;
       e.preventDefault();
       const celdas = [...celda.closest('table').querySelectorAll('td, th')];
       let i = celdas.indexOf(celda) + (e.shiftKey ? -1 : 1);
       if (i >= celdas.length) {
         const fila = celda.closest('tr');
-        const nueva = document.createElement('tr');
-        for (let k = 0; k < fila.cells.length; k++) nueva.append(Object.assign(document.createElement('td'), { innerHTML: '<br>' }));
+        const nueva = filaVacia(fila.cells.length, celda.closest('table'));
         celda.closest('table').querySelector('tbody, table').append(nueva);
         el.dispatchEvent(new Event('input', { bubbles: true }));
         i = celdas.length;
@@ -394,29 +464,57 @@ export function crearEditorVisual(el, { contexto, alCambiar, unaLinea = false, a
 
 // ───────────────────────── Comandos de la barra ─────────────────────────
 
+/** Inserta un bloque de comandos (con lo seleccionado, si hay) y deja el cursor dentro. */
+function insertarCodigo(editor, lenguaje) {
+  const rango = rangoDentro(editor.el);
+  const seleccion = rango?.toString() ?? '';
+  editor.insertarHtml(`${codigoEditable({ lenguaje, lineas: seleccion ? seleccion.split('\n') : [''] })}<p><br></p>`);
+  const pre = bloqueActual(editor.el)?.previousElementSibling;
+  if (pre?.tagName !== 'PRE') return;
+  const texto = [...pre.childNodes].reverse().find((n) => n.nodeType === 3);
+  if (!texto) return;
+  const cursor = document.createRange();
+  cursor.setStart(texto, Math.max(0, texto.data.length - 1));
+  cursor.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(cursor);
+}
+
+/** Cambia el equipo de un bloque de comandos (resaltado y etiqueta). */
+export function cambiarLenguaje(editor, pre, lenguaje) {
+  pre.dataset.lenguaje = lenguaje;
+  const etiqueta = pre.querySelector('.etiqueta-codigo');
+  if (etiqueta) etiqueta.textContent = nombreDeLenguaje(lenguaje);
+  editor.el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/** Convierte el párrafo actual en recuadro (<aside>) o cita (<blockquote>), o lo devuelve a párrafo. */
 function alternarRecuadro(editor, variante) {
   const el = editor.el;
+  const etiqueta = variante === 'cita' ? 'BLOCKQUOTE' : 'ASIDE';
+  const crear = () => {
+    const nodo = document.createElement(etiqueta.toLowerCase());
+    if (etiqueta === 'ASIDE') nodo.dataset.recuadro = variante;
+    return nodo;
+  };
   const b = bloqueActual(el);
   if (!b) {
-    editor.insertarHtml(`<aside data-recuadro="${variante}"><br></aside>`);
+    const nodo = crear();
+    nodo.append(document.createElement('br'));
+    editor.insertarHtml(nodo.outerHTML);
     return;
   }
-  if (b.tagName === 'ASIDE') {
-    if (b.dataset.recuadro === variante) {
-      const p = document.createElement('p');
-      p.append(...b.childNodes);
-      if (!p.firstChild) p.append(document.createElement('br'));
-      b.replaceWith(p);
-      cursorAlFinal(p);
-    } else b.dataset.recuadro = variante;
-  } else if (/^(P|DIV|H[1-6])$/.test(b.tagName)) {
-    const recuadro = document.createElement('aside');
-    recuadro.dataset.recuadro = variante;
-    recuadro.append(...b.childNodes);
-    if (!recuadro.firstChild) recuadro.append(document.createElement('br'));
-    b.replaceWith(recuadro);
-    cursorAlFinal(recuadro);
-  } else return;
+  const esRecuadro = b.tagName === 'ASIDE' || b.tagName === 'BLOCKQUOTE';
+  const mismo = b.tagName === etiqueta && (etiqueta === 'BLOCKQUOTE' || b.dataset.recuadro === variante);
+  let destino;
+  if (esRecuadro && mismo) destino = document.createElement('p');
+  else if (esRecuadro || /^(P|DIV|H[1-6])$/.test(b.tagName)) destino = crear();
+  else return;
+  destino.append(...b.childNodes);
+  if (!destino.firstChild) destino.append(document.createElement('br'));
+  b.replaceWith(destino);
+  cursorAlFinal(destino);
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
@@ -476,6 +574,15 @@ export function aplicarComandoVisual(editor, nombre) {
     aviso: () => alternarRecuadro(editor, 'aviso'),
     critico: () => alternarRecuadro(editor, 'critico'),
     exito: () => alternarRecuadro(editor, 'exito'),
+    cita: () => alternarRecuadro(editor, 'cita'),
+    'linea-tiempo': () =>
+      editor.insertarHtml(
+        `${mdAEditable('@ 08:00 | Recepción del reporte\n@ 08:15 | Inicio de la revisión\n@ 09:00 | Servicio restablecido', {})}<p><br></p>`,
+      ),
+    'codigo-cisco': () => insertarCodigo(editor, 'cisco'),
+    'codigo-huawei': () => insertarCodigo(editor, 'huawei'),
+    'codigo-mikrotik': () => insertarCodigo(editor, 'mikrotik'),
+    'codigo-linux': () => insertarCodigo(editor, 'linux'),
     separador: () => editor.insertarHtml('<hr><p><br></p>'),
     'tabla-detalle': () => editor.insertarHtml(tablaHtml(2, ['Detalle', 'Información'])),
     'tabla-2': () => editor.insertarHtml(tablaHtml(2)),
@@ -506,9 +613,14 @@ function celdaVacia(etiqueta) {
   return celda;
 }
 
-function filaVacia(columnas) {
+function filaVacia(columnas, tabla = null) {
   const fila = document.createElement('tr');
   for (let i = 0; i < columnas; i++) fila.append(celdaVacia('td'));
+  // En una línea de tiempo cada fila es «hora | texto».
+  if (tabla?.classList.contains('linea-tiempo')) {
+    fila.cells[0]?.classList.add('lt-hora');
+    fila.cells[1]?.classList.add('lt-texto');
+  }
   return fila;
 }
 
@@ -534,7 +646,7 @@ export function operarTabla(editor, accion, celda = celdaActual(editor.el)) {
   switch (accion) {
     case 'fila-arriba':
     case 'fila-abajo': {
-      const nueva = filaVacia(columnas);
+      const nueva = filaVacia(columnas, tabla);
       if (enCabecera) cuerpo().prepend(nueva);
       else if (accion === 'fila-arriba') fila.before(nueva);
       else fila.after(nueva);
@@ -624,7 +736,8 @@ export function estadoDeLaBarra(editor) {
   };
   const b = editor ? bloqueActual(editor.el) : null;
   const tag = b?.tagName;
-  const estilo = tag === 'H1' ? 'Título' : tag === 'H2' ? 'Sección' : tag === 'H3' ? 'Rótulo' : tag === 'ASIDE' ? 'Recuadro' : 'Texto';
+  const estilo =
+    { H1: 'Título', H2: 'Sección', H3: 'Rótulo', ASIDE: 'Recuadro', BLOCKQUOTE: 'Cita', PRE: 'Comandos', TABLE: 'Tabla' }[tag] ?? 'Texto';
   return {
     estilo,
     negrita: consultar('bold'),
@@ -636,4 +749,4 @@ export function estadoDeLaBarra(editor) {
   };
 }
 
-export { chipHtml, mdAEditable, rangoDentro };
+export { chipHtml, mdAEditable, pildoraEditableHtml, rangoDentro };

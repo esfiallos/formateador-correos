@@ -135,6 +135,15 @@ export const FORMATOS = {
   'tabla-3': (a) => insertarBloque(a, tabla(3)),
   'tabla-4': (a) => insertarBloque(a, tabla(4)),
 
+  cita: (a) => prefijarLineas(a, '>> ', /^>>\s?/),
+  'linea-tiempo': (a) => insertarBloque(a, '@ 08:00 | Recepción del reporte\n@ 08:15 | Inicio de la revisión\n@ 09:00 | Servicio restablecido'),
+  progreso: (a) => insertarBloque(a, '%% 50 | Avance', { seleccionar: [3, 5] }),
+  pildora: (a) => envolver(a, '((', '))', 'Resuelto'),
+  'codigo-cisco': (a) => insertarBloque(a, '```cisco\nRouter# show ip interface brief\n```', { seleccionar: [9, 40] }),
+  'codigo-huawei': (a) => insertarBloque(a, '```huawei\n<HUAWEI> display interface brief\n```', { seleccionar: [10, 41] }),
+  'codigo-mikrotik': (a) => insertarBloque(a, '```mikrotik\n[admin@MikroTik] > /interface print\n```', { seleccionar: [12, 47] }),
+  'codigo-linux': (a) => insertarBloque(a, '```linux\n$ ping -c 4 8.8.8.8\n```', { seleccionar: [9, 28] }),
+
   variable: (a) => envolver(a, '{{', '}}', 'Nombre'),
   'variable-opcional': (a) => envolver(a, '{{', '?}}', 'Dato opcional'),
   'variable-opciones': (a) => {

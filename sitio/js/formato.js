@@ -177,26 +177,45 @@ const RE_NUMERO = /^(\d{1,3})[.)]\s+(.*)$/;
 const RE_BOTON = /^\[\[\s*(.+?)\s*\|\s*(.+?)\s*\]\]$/;
 const RE_SEPARADOR = /^(?:-{3,}|_{3,}|\*{3,}|─{3,})$/;
 const RE_IMAGEN = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
-/** Recuadros: > nota · ! aviso · !! crítico · ✓ éxito. */
+/** Recuadros: > nota · ! aviso · !! crítico · ✓ éxito · >> cita. */
 const RECUADROS = [
   { tipo: 'critico', re: /^!!\s+(.*)$/ },
   { tipo: 'exito', re: /^✓\s+(.*)$/ },
+  { tipo: 'cita', re: /^>>\s?(.*)$/ },
   { tipo: 'nota', re: /^>\s?(.*)$/ },
   { tipo: 'aviso', re: /^!\s+(.*)$/ },
 ];
-const VARIANTE = { nota: 'info', aviso: 'aviso', critico: 'critico', exito: 'exito' };
+const VARIANTE = { nota: 'info', aviso: 'aviso', critico: 'critico', exito: 'exito', cita: 'cita' };
+/** Línea de tiempo: «@ 08:15 | Se recibe el reporte». */
+const RE_LINEA_TIEMPO = /^@\s+(.*)$/;
+/** Barra de progreso: «%% 75 | Avance de la migración». */
+const RE_PROGRESO = /^%%\s*(\d{1,3})\s*%?\s*(?:\|\s*(.*))?$/;
+/** Bloque de comandos: ```cisco … ``` */
+const RE_CERCA_CODIGO = /^```\s*([\w+-]*)\s*$/;
 const esFilaConBarras = (l) => /^\|.*\|$/.test(l.trim());
 const esFilaConTabs = (l) => l.includes('\t') && l.trim() !== '';
+
+/** Nombres que se aceptan para cada equipo en un bloque de comandos. */
+const ALIAS_LENGUAJE = {
+  cisco: 'cisco', ios: 'cisco', 'ios-xe': 'cisco', nxos: 'cisco',
+  huawei: 'huawei', vrp: 'huawei',
+  mikrotik: 'mikrotik', routeros: 'mikrotik', mk: 'mikrotik',
+  linux: 'linux', bash: 'linux', sh: 'linux', shell: 'linux', consola: 'linux',
+};
+export const normalizarLenguaje = (l) => ALIAS_LENGUAJE[String(l ?? '').toLowerCase()] ?? (String(l ?? '').toLowerCase() || '');
 
 function tipoDeLinea(linea, siguiente) {
   const t = linea.trim();
   if (!t) return 'vacia';
+  if (RE_CERCA_CODIGO.test(t)) return 'codigo';
   if (esFilaConTabs(linea) && siguiente != null && esFilaConTabs(siguiente)) return 'tabla-tabs';
   if (esFilaConBarras(t)) return 'tabla';
   if (RE_SEPARADOR.test(t)) return 'separador';
   if (RE_TITULO.test(t)) return 'titulo';
   if (RE_BOTON.test(t)) return 'boton';
   if (RE_IMAGEN.test(t)) return 'imagen';
+  if (RE_LINEA_TIEMPO.test(t)) return 'linea';
+  if (RE_PROGRESO.test(t)) return 'progreso';
   for (const r of RECUADROS) if (r.re.test(t)) return r.tipo;
   if (RE_VINETA.test(t)) return 'vineta';
   if (RE_NUMERO.test(t)) return 'numero';
@@ -234,6 +253,41 @@ export function analizarBloques(texto) {
     const t = linea.trim();
 
     if (tipo === 'vacia') {
+      i++;
+      continue;
+    }
+
+    if (tipo === 'codigo') {
+      // Todo hasta la cerca de cierre va tal cual (espacios incluidos).
+      const lenguaje = normalizarLenguaje(t.match(RE_CERCA_CODIGO)[1]);
+      const contenido = [];
+      i++;
+      while (i < lineas.length && lineas[i].trim() !== '```') contenido.push(lineas[i++].replace(/\s+$/, ''));
+      i++;
+      while (contenido.length && !contenido[contenido.length - 1]) contenido.pop();
+      while (contenido.length && !contenido[0]) contenido.shift();
+      bloques.push({ tipo: 'codigo', lenguaje, lineas: contenido });
+      continue;
+    }
+
+    if (tipo === 'linea') {
+      const items = [];
+      while (i < lineas.length && tipoDeLinea(lineas[i], lineas[i + 1]) === 'linea') {
+        const contenido = lineas[i++].trim().match(RE_LINEA_TIEMPO)[1];
+        const corte = contenido.search(/(?<!\\)\|/);
+        items.push(
+          corte >= 0
+            ? { hora: contenido.slice(0, corte).trim(), texto: contenido.slice(corte + 1).trim() }
+            : { hora: '', texto: contenido.trim() },
+        );
+      }
+      bloques.push({ tipo: 'linea', items });
+      continue;
+    }
+
+    if (tipo === 'progreso') {
+      const [, valor, rotulo] = t.match(RE_PROGRESO);
+      bloques.push({ tipo: 'progreso', valor: Math.min(100, Math.max(0, Number(valor))), texto: (rotulo ?? '').trim() });
       i++;
       continue;
     }
@@ -307,7 +361,8 @@ export function analizarBloques(texto) {
         else break;
         i++;
       }
-      bloques.push({ tipo: 'nota', variante: VARIANTE[tipo], lineas: contenido });
+      if (tipo === 'cita') bloques.push({ tipo: 'cita', lineas: contenido });
+      else bloques.push({ tipo: 'nota', variante: VARIANTE[tipo], lineas: contenido });
       continue;
     }
 
@@ -373,6 +428,51 @@ function enfasis(s) {
 const ESTILO_FALTANTE =
   'background-color:#fff3bf;color:#7a5600;border:1px dashed #e0b400;border-radius:3px;padding:0 4px;font-weight:normal;';
 
+// ───────────────────────── Píldoras de estado y código en línea ─────────────────────────
+
+/** Colores de las píldoras: ((Resuelto)) · ((rojo:Caído)). */
+export const COLORES_PILDORA = {
+  verde: { nombre: 'Verde', fondo: '#e6f4ea', texto: '#1e6b3c', borde: '#b9dfc5' },
+  ambar: { nombre: 'Ámbar', fondo: '#fff4dc', texto: '#8a5a00', borde: '#f1d39a' },
+  rojo: { nombre: 'Rojo', fondo: '#fdecea', texto: '#a52a21', borde: '#f3c1bc' },
+  azul: { nombre: 'Azul', fondo: '#e8f0fb', texto: '#1d4f91', borde: '#bfd3ef' },
+  morado: { nombre: 'Morado', fondo: '#f1eafb', texto: '#5b2f91', borde: '#d9c8f0' },
+  gris: { nombre: 'Gris', fondo: '#eef0f3', texto: '#4a5260', borde: '#d5d9e0' },
+};
+
+/** Patrón de píldora: ((texto)) o ((color:texto)). */
+export const patronPildora = () => /\(\(([^()\n]{1,80}?)\)\)/g;
+
+const sinAcentos = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** Separa «color:texto»; si no hay color válido, todo es texto. */
+export function leerPildora(contenido) {
+  const m = /^\s*([a-záéíóú]+)\s*:\s*(.+)$/i.exec(contenido);
+  if (m && COLORES_PILDORA[sinAcentos(m[1])]) return { color: sinAcentos(m[1]), texto: m[2].trim(), explicito: true };
+  return { color: colorDePildora(contenido), texto: contenido.trim(), explicito: false };
+}
+
+/** Color automático según el estado escrito (Resuelto → verde, Caído → rojo, Pendiente → ámbar…). */
+export function colorDePildora(texto) {
+  const t = sinAcentos(texto);
+  if (/resuel|operativ|restablec|cerrad|complet|exitos|\bok\b|activ|aprobad|en linea|\bup\b|normal|estable/.test(t)) return 'verde';
+  if (/critic|caid|falla|\bdown\b|urgent|sin servicio|rechaz|error|interrump|\balta\b|perdid/.test(t)) return 'rojo';
+  if (/pendient|revision|progreso|en curso|espera|escalad|monitore|\bmedia\b|degradad|intermit|programad|parcial/.test(t)) return 'ambar';
+  if (/inform|nuevo|asignad|\bbaja\b|recibid|abiert/.test(t)) return 'azul';
+  return 'gris';
+}
+
+export const ESTILO_CODIGO_EN_LINEA =
+  "font-family:Consolas,'Courier New',monospace;font-size:90%;background-color:#f3efe8;color:#7a2e12;padding:1px 5px;border:1px solid #e6dfd3;border-radius:4px;";
+
+function pildoraHtml(texto, color) {
+  const c = COLORES_PILDORA[color] ?? COLORES_PILDORA.gris;
+  return (
+    `<span style="display:inline-block;padding:1px 10px;border-radius:999px;background-color:${c.fondo};color:${c.texto};` +
+    `border:1px solid ${c.borde};font-size:85%;font-weight:bold;line-height:1.6;white-space:nowrap;">${texto}</span>`
+  );
+}
+
 /**
  * Texto de una línea → HTML con estilos en línea (apto para Outlook).
  * Soporta **negrita**, *cursiva*, ++subrayado++, ~~tachado~~, ==resaltado==,
@@ -386,9 +486,17 @@ export function formatoEnLinea(texto, { colorEnlace = '#1d4ed8' } = {}) {
 
   let s = escaparHtml(texto);
 
+  // Código en línea: su contenido no recibe ningún otro formato.
+  s = s.replace(/`([^`\n]+)`/g, (_, codigo) => guardar(`<code style="${ESTILO_CODIGO_EN_LINEA}">${codigo}</code>`));
+
   s = s.replace(new RegExp(`${MARCA_VARIABLE}([^${MARCA_VARIABLE}]+)${MARCA_VARIABLE}`, 'g'), (_, nombre) =>
     guardar(`<span style="${ESTILO_FALTANTE}">[${nombre}]</span>`),
   );
+
+  s = s.replace(patronPildora(), (_, contenido) => {
+    const { color, texto: rotulo } = leerPildora(contenido);
+    return guardar(pildoraHtml(enfasis(rotulo), color));
+  });
 
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (todo, rotulo, url) => {
     const segura = urlSegura(url);
@@ -424,6 +532,8 @@ export function formatoEnLinea(texto, { colorEnlace = '#1d4ed8' } = {}) {
 export function textoPlanoEnLinea(texto) {
   return String(texto ?? '')
     .replace(new RegExp(`${MARCA_VARIABLE}([^${MARCA_VARIABLE}]+)${MARCA_VARIABLE}`, 'g'), '[$1]')
+    .replace(patronPildora(), (_, contenido) => `[${leerPildora(contenido).texto}]`)
+    .replace(/`([^`\n]+)`/g, '$1')
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, rotulo, url) => (rotulo === url ? url : `${rotulo} (${url})`))
     .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, '$1')
     .replace(/__(?=\S)(.+?)(?<=\S)__/g, '$1')

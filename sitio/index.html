@@ -194,6 +194,21 @@
             </div>
             <button type="button" data-formato="boton" data-tip="Botón con enlace" aria-label="Botón"><svg class="ico"><use href="#i-boton"/></svg></button>
             <button type="button" data-formato="separador" data-tip="Línea separadora" aria-label="Separador"><svg class="ico"><use href="#i-separador"/></svg></button>
+            <div class="envoltura-menu">
+              <button type="button" class="boton-insertar" data-menu="menuInsertar" aria-haspopup="menu" aria-expanded="false" data-tip="Más bloques"><svg class="ico"><use href="#i-mas"/></svg><span>Insertar</span><svg class="ico ico-mini"><use href="#i-flecha"/></svg></button>
+              <div class="menu menu-insertar" id="menuInsertar" role="menu" hidden>
+                <button type="button" role="menuitem" data-formato="pildora"><span class="muestra-insertar"><span class="pildora pildora-verde">Resuelto</span></span><span>Etiqueta de estado<small>Resuelto, En revisión, Crítico… dentro del texto</small></span></button>
+                <button type="button" role="menuitem" data-formato="progreso"><span class="muestra-insertar"><span class="mini-progreso"><i></i></span></span><span>Barra de progreso<small>Avance de una tarea en %</small></span></button>
+                <button type="button" role="menuitem" data-formato="linea-tiempo"><span class="muestra-insertar"><span class="mini-linea"><i></i><i></i><i></i></span></span><span>Línea de tiempo<small>Cronología del caso, hora por hora</small></span></button>
+                <button type="button" role="menuitem" data-formato="cita"><span class="muestra-insertar"><span class="mini-cita">“…”</span></span><span>Cita<small>Lo que reportó el cliente, textual</small></span></button>
+                <hr>
+                <p class="menu-titulo">Bloque de comandos</p>
+                <button type="button" role="menuitem" data-formato="codigo-cisco"><span class="muestra-insertar"><code class="mini-prompt">R#</code></span><span>Cisco IOS</span></button>
+                <button type="button" role="menuitem" data-formato="codigo-huawei"><span class="muestra-insertar"><code class="mini-prompt">&lt;H&gt;</code></span><span>Huawei VRP</span></button>
+                <button type="button" role="menuitem" data-formato="codigo-mikrotik"><span class="muestra-insertar"><code class="mini-prompt">[@]&gt;</code></span><span>MikroTik RouterOS</span></button>
+                <button type="button" role="menuitem" data-formato="codigo-linux"><span class="muestra-insertar"><code class="mini-prompt">$</code></span><span>Linux</span></button>
+              </div>
+            </div>
           </div>
           <div class="grupo-herr">
             <div class="envoltura-menu">
@@ -365,6 +380,12 @@
           <dt><code>| A | B |</code> + <code>|---|---|</code></dt><dd>Tabla (o pégala de Excel)</dd>
           <dt><code>[[Texto|https://…]]</code></dt><dd>Botón</dd>
           <dt><code>---</code></dt><dd>Separador</dd>
+          <dt><code>@ 08:15 | Texto</code></dt><dd>Línea de tiempo (una línea por evento)</dd>
+          <dt><code>%% 75 | Texto</code></dt><dd>Barra de progreso</dd>
+          <dt><code>&gt;&gt; texto</code></dt><dd>Cita (última línea <code>— Autor</code>, opcional)</dd>
+          <dt><code>```cisco</code> … <code>```</code></dt><dd>Comandos: cisco, huawei, mikrotik o linux</dd>
+          <dt><code>((Resuelto))</code> <code>((rojo:Caído))</code></dt><dd>Etiqueta de estado (color automático o elegido)</dd>
+          <dt><code>`show run`</code></dt><dd>Comando dentro del texto</dd>
         </dl>
       </section>
       <section>

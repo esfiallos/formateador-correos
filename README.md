@@ -22,6 +22,12 @@ Todo funciona en el navegador; nada se envía a ningún servidor. Ajustes y plan
 | `[[Texto del botón\|https://…]]` | Botón |
 | `\| A \| B \|` + `\|---\|---\|` | Tabla (o pégala desde Excel) |
 | `---` | Separador |
+| `@ 08:15 \| Texto` | Línea de tiempo |
+| `%% 75 \| Texto` | Barra de progreso |
+| `>> texto` | Cita (última línea `— Autor`, opcional) |
+| ` ```cisco ` … ` ``` ` | Bloque de comandos: cisco, huawei, mikrotik o linux (prompt resaltado) |
+| `((Resuelto))`, `((rojo:Caído))` | Etiqueta de estado (color automático o elegido) |
+| `` `show run` `` | Comando dentro del texto |
 
 ## Desarrollo
 

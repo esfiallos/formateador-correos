@@ -197,6 +197,101 @@ function botonHtml(b, t) {
   );
 }
 
+// ───────────────────────── Línea de tiempo, progreso, cita y comandos ─────────────────────────
+
+/** Tabla de dos columnas: la izquierda (hora) con un borde derecho continuo que hace de eje. */
+function lineaDeTiempoHtml(b, t) {
+  const fmt = (s) => formatoEnLinea(s, { colorEnlace: t.acentoTexto });
+  const filas = b.items
+    .map((it, i) => {
+      const abajo = i === b.items.length - 1 ? 4 : 16;
+      return (
+        `<tr><td width="92" align="right" valign="top" style="width:92px;padding:1px 14px ${abajo}px 0;border-right:2px solid ${t.acento};` +
+        `font-family:${t.fuente};font-size:${t.tam - 2}px;line-height:1.55;font-weight:bold;color:${t.acentoTexto};vertical-align:top;white-space:nowrap;">${fmt(it.hora) || '&nbsp;'}</td>` +
+        `<td valign="top" style="padding:0 0 ${abajo}px 16px;${t.base}vertical-align:top;">` +
+        `<span style="color:${t.acento};font-size:9px;line-height:1;vertical-align:middle;">&#9679;</span>&nbsp;&nbsp;${fmt(it.texto)}</td></tr>`
+      );
+    })
+    .join('');
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">${filas}</table>${espacio(16)}`;
+}
+
+/** Barra estática: dos celdas con ancho en %, sin imágenes ni CSS que Outlook ignore. */
+function progresoHtml(b, t) {
+  const fmt = (s) => formatoEnLinea(s, { colorEnlace: t.acentoTexto });
+  const v = b.valor;
+  const lleno = v >= 100 ? '#2e8b57' : t.acento;
+  const celda = (ancho, color, radio) =>
+    `<td width="${ancho}%" height="10" bgcolor="${color}" style="width:${ancho}%;height:10px;line-height:10px;font-size:1px;background-color:${color};border-radius:${radio};">&nbsp;</td>`;
+  const barra =
+    (v > 0 ? celda(v, lleno, v >= 100 ? '5px' : '5px 0 0 5px') : '') + (v < 100 ? celda(100 - v, '#e9e3d9', v <= 0 ? '5px' : '0 5px 5px 0') : '');
+  return (
+    presentacion(
+      `<tr><td style="${t.base}font-weight:bold;padding:0 0 6px 0;">${fmt(b.texto) || '&nbsp;'}</td>` +
+        `<td align="right" style="${t.base}font-weight:bold;color:${lleno};padding:0 0 6px 12px;white-space:nowrap;text-align:right;">${v}%</td></tr>`,
+    ) +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;"><tr>${barra}</tr></table>` +
+    espacio(16)
+  );
+}
+
+function citaHtml(b, t) {
+  const fmt = (s) => formatoEnLinea(s, { colorEnlace: t.acentoTexto });
+  const lineas = [...b.lineas];
+  const autor = lineas.length > 1 && /^(?:—|--|-)\s+/.test(lineas[lineas.length - 1]) ? lineas.pop().replace(/^(?:—|--|-)\s+/, '') : '';
+  return (
+    presentacion(
+      `<tr><td style="border-left:3px solid #cfc6b8;padding:4px 0 4px 16px;">` +
+        `<p style="margin:0;${t.base}font-style:italic;color:#4b5563;">${lineas.map(fmt).join('<br>')}</p>` +
+        (autor ? `<p style="margin:6px 0 0 0;${t.chica}">— ${fmt(autor)}</p>` : '') +
+        `</td></tr>`,
+    ) + espacio(16)
+  );
+}
+
+/** Equipos con resaltado de prompt; cualquier otro nombre se muestra tal cual. */
+export const LENGUAJES = {
+  cisco: { nombre: 'Cisco IOS', prompt: /^([A-Za-z0-9][\w.\-/]*(?:\([\w.\-/]+\))?[#>])(.*)$/, comentario: /^\s*!/ },
+  huawei: { nombre: 'Huawei VRP', prompt: /^([<[]~?[^\s<>[\]]+[>\]])(.*)$/, comentario: /^\s*#\s*$/ },
+  mikrotik: { nombre: 'MikroTik RouterOS', prompt: /^(\[[^\]\n]+\]\s*[^>\n]*>)(.*)$/, comentario: /^\s*#/ },
+  linux: { nombre: 'Linux', prompt: /^((?:\[[^\]\n]+\]|[\w.-]+@[\w.-]+(?::[^\s$#]*)?)?\s?[$#])(\s.*|)$/, comentario: /^\s*\/\// },
+};
+
+const COLORES_CODIGO = { fondo: '#1a2433', cabecera: '#243247', texto: '#c9d4e3', prompt: '#7ee2b8', comando: '#ffffff', comentario: '#8796ab' };
+
+function espaciosVisibles(html) {
+  return html.replace(/\t/g, '    ').replace(/ {2,}/g, (m) => '&nbsp;'.repeat(m.length)).replace(/^ /, '&nbsp;');
+}
+
+/** Una línea de comandos → HTML: prompt en verde, comando en blanco, salida en gris, comentarios atenuados. */
+export function resaltarLinea(linea, lenguaje) {
+  if (!linea) return '&nbsp;';
+  const conf = LENGUAJES[lenguaje];
+  const c = COLORES_CODIGO;
+  if (conf?.comentario.test(linea)) return `<span style="color:${c.comentario};font-style:italic;">${espaciosVisibles(escaparHtml(linea))}</span>`;
+  const m = conf?.prompt.exec(linea);
+  if (m) {
+    return (
+      `<span style="color:${c.prompt};">${espaciosVisibles(escaparHtml(m[1]))}</span>` +
+      `<span style="color:${c.comando};font-weight:bold;">${espaciosVisibles(escaparHtml(m[2]))}</span>`
+    );
+  }
+  return espaciosVisibles(escaparHtml(linea));
+}
+
+function codigoHtml(b, t) {
+  const c = COLORES_CODIGO;
+  const nombre = LENGUAJES[b.lenguaje]?.nombre ?? (b.lenguaje ? b.lenguaje.toUpperCase() : 'Comandos');
+  const mono = "Consolas,'Courier New',Menlo,monospace";
+  const lineas = (b.lineas.length ? b.lineas : ['']).map((l) => resaltarLinea(l, b.lenguaje)).join('<br>');
+  return (
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;">` +
+    `<tr><td bgcolor="${c.cabecera}" style="background-color:${c.cabecera};padding:7px 14px;border-radius:8px 8px 0 0;font-family:${t.fuente};font-size:11px;line-height:1.4;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#a9b8cf;">${escaparHtml(nombre)}</td></tr>` +
+    `<tr><td bgcolor="${c.fondo}" style="background-color:${c.fondo};padding:14px 16px;border-radius:0 0 8px 8px;font-family:${mono};font-size:13px;line-height:1.6;color:${c.texto};mso-line-height-rule:exactly;">${lineas}</td></tr>` +
+    `</table>${espacio(16)}`
+  );
+}
+
 const RE_DATOS_IMAGEN = /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i;
 
 /** Resuelve img:ID (imagen pegada) o una URL https; devuelve {src, ancho} o null. */
@@ -247,6 +342,14 @@ function bloqueHtml(b, t, indice, imagenes) {
       return botonHtml(b, t);
     case 'imagen':
       return imagenHtml(b, t, imagenes);
+    case 'linea':
+      return lineaDeTiempoHtml(b, t);
+    case 'progreso':
+      return progresoHtml(b, t);
+    case 'cita':
+      return citaHtml(b, t);
+    case 'codigo':
+      return codigoHtml(b, t);
     case 'separador':
       return presentacion(`<tr><td style="padding:8px 0 22px 0;"><div style="border-top:1px solid ${t.linea};height:1px;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>`);
     default:
@@ -368,6 +471,16 @@ function bloquePlano(b) {
       return `${p(b.texto)}: ${b.url}`;
     case 'imagen':
       return `[Imagen${b.alt ? `: ${b.alt}` : ''}]`;
+    case 'linea':
+      return b.items.map((it) => `${p(it.hora).padEnd(8)} │ ${p(it.texto)}`).join('\n');
+    case 'progreso': {
+      const llenos = Math.round(b.valor / 10);
+      return `${b.texto ? `${p(b.texto)}: ` : ''}${b.valor}% [${'█'.repeat(llenos)}${'░'.repeat(10 - llenos)}]`;
+    }
+    case 'cita':
+      return b.lineas.map((l) => `“ ${p(l)}`).join('\n');
+    case 'codigo':
+      return b.lineas.map((l) => `    ${l}`).join('\n');
     case 'separador':
       return '────────────────────';
     default:
@@ -445,7 +558,8 @@ export function construirCorreo(datos, { ahora = new Date() } = {}) {
     partes.push('', ...lineasFirma.filter((v, i) => i === 1 || v?.trim()).map((v) => textoPlanoEnLinea(v.trim())));
   }
   if (textoPie) partes.push('', '—', textoPlanoEnLinea(textoPie));
-  const plano = partes.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  // Sin trim() completo: un bloque de comandos al inicio conserva su sangría.
+  const plano = partes.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\s+$/, '');
 
   return { html, texto: plano, faltantes, fondo: t.fondoExterior || '#ffffff' };
 }
