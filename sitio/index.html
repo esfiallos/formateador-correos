@@ -127,6 +127,12 @@
               <svg class="ico"><use href="#i-panel"/></svg>
             </button>
             <span class="plantilla-activa" id="plantillaActiva">Mensaje libre</span>
+            <span class="cambios-plantilla" id="cambiosPlantilla" hidden>
+              <span class="punto-cambios" aria-hidden="true"></span>Cambios sin guardar
+              <button type="button" class="boton boton-secundario boton-chico" data-accion="guardar-en-plantilla" title="Ctrl + S">
+                <svg class="ico ico-chico"><use href="#i-guardar"/></svg>Guardar en la plantilla
+              </button>
+            </span>
             <label class="interruptor interruptor-chico" title="Mostrar el encabezado con título y subtítulo">
               <input type="checkbox" data-campo="encabezado.mostrar"><span aria-hidden="true"></span>Encabezado
             </label>
@@ -210,6 +216,20 @@
         <div class="hoja-cuerpo" id="hojaCuerpo">
           <div class="documento" id="documento" role="textbox" aria-multiline="true" aria-label="Mensaje" data-placeholder="Escribe o pega el contenido del correo… Pega capturas con Ctrl+V, tablas desde Excel o Outlook, o elige una plantilla."></div>
           <textarea id="texto" data-campo="texto" spellcheck="true" aria-label="Mensaje en código" hidden></textarea>
+          <div class="barra-tabla" id="barraTabla" role="toolbar" aria-label="Tabla" hidden>
+            <span class="barra-tabla-titulo">Fila</span>
+            <button type="button" data-tabla="fila-arriba" data-tip="Agregar fila arriba">↑ +</button>
+            <button type="button" data-tabla="fila-abajo" data-tip="Agregar fila abajo">↓ +</button>
+            <button type="button" data-tabla="quitar-fila" class="peligro" data-tip="Quitar esta fila">Quitar</button>
+            <span class="barra-tabla-sep" aria-hidden="true"></span>
+            <span class="barra-tabla-titulo">Columna</span>
+            <button type="button" data-tabla="columna-izquierda" data-tip="Agregar columna a la izquierda">← +</button>
+            <button type="button" data-tabla="columna-derecha" data-tip="Agregar columna a la derecha">→ +</button>
+            <button type="button" data-tabla="quitar-columna" class="peligro" data-tip="Quitar esta columna">Quitar</button>
+            <span class="barra-tabla-sep" aria-hidden="true"></span>
+            <button type="button" data-tabla="cabecera" data-tip="Primera fila como encabezado (sí/no)">Encabezado</button>
+            <button type="button" data-tabla="quitar-tabla" class="peligro" data-tip="Quitar toda la tabla"><svg class="ico ico-chico"><use href="#i-basura"/></svg></button>
+          </div>
           <div class="soltar" aria-hidden="true"><svg class="ico"><use href="#i-imagen"/></svg>Suelta la imagen para insertarla</div>
         </div>
 
@@ -390,7 +410,8 @@
         <span class="ip-descripcion"></span>
         <span class="ip-meta"></span>
       </button>
-      <button type="button" class="boton-icono ip-eliminar" aria-label="Eliminar plantilla" hidden><svg class="ico"><use href="#i-basura"/></svg></button>
+      <button type="button" class="boton-icono ip-restaurar" aria-label="Restaurar la versión original" title="Restaurar la versión original" hidden><svg class="ico"><use href="#i-deshacer"/></svg></button>
+      <button type="button" class="boton-icono ip-eliminar" aria-label="Eliminar plantilla" title="Eliminar plantilla" hidden><svg class="ico"><use href="#i-basura"/></svg></button>
     </div>
   </template>
 </body>

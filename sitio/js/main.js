@@ -1,14 +1,14 @@
 // Interfaz: dos vistas (Redactar · Diseñar), campos enlazados al estado, vista previa y copia.
 
 import { construirCorreo, documentoCompleto, DISENOS, estadoPredeterminado, FUENTES, PALETA, colorValido } from './correo.js';
-import { describirVariable, detectarVariables, patronVariable, textoPlanoEnLinea, tokenDeVariable } from './formato.js';
+import { analizarBloques, describirVariable, detectarVariables, patronVariable, textoPlanoEnLinea, tokenDeVariable } from './formato.js';
 import { EJEMPLO_INICIAL, PLANTILLAS } from './plantillas.js';
 import { guardar, leer } from './almacen.js';
 import { copiarConFormato, copiarTexto } from './portapapeles.js';
 import { aviso } from './aviso.js';
 import { enlazarMenus, estiloDeLinea, FORMATOS, insertarBloque } from './editor.js';
 import { esImagen, imagenesUsadas, procesarImagen } from './imagenes.js';
-import { aplicarComandoVisual, chipHtml, crearEditorVisual, estadoDeLaBarra, mdAEditable, rangoDentro } from './visual.js';
+import { aplicarComandoVisual, celdaActual, chipHtml, crearEditorVisual, estadoDeLaBarra, mdAEditable, operarTabla, rangoDentro } from './visual.js';
 import { pedirDatos } from './dialogos.js';
 
 const CLAVES = {
@@ -18,6 +18,7 @@ const CLAVES = {
   vista: 'redacta:vista',
   lateral: 'redacta:lateral-plantillas',
   modo: 'redacta:modo-editor',
+  ediciones: 'redacta:plantillas-editadas:v1',
 };
 
 const $ = (sel, raiz = document) => raiz.querySelector(sel);
@@ -63,6 +64,7 @@ let imagenes = leer(CLAVES.imagenes, {}) || {};
 
 let guardadoPendiente;
 function guardarEstado() {
+  if (typeof pintarEstadoPlantilla === 'function') pintarEstadoPlantilla();
   clearTimeout(guardadoPendiente);
   guardadoPendiente = setTimeout(() => guardar(CLAVES.estado, estado), 250);
 }
@@ -802,7 +804,81 @@ function vaciarVariables() {
   });
 }
 
-const todasLasPlantillas = () => [...PLANTILLAS, ...plantillasPropias.map((p) => ({ ...p, propia: true }))];
+// Plantillas incluidas que la persona editó: id → { titulo, subtitulo, cuerpo, editadaEn }.
+let ediciones = leer(CLAVES.ediciones, {}) || {};
+
+const todasLasPlantillas = () => [
+  ...PLANTILLAS.map((p) => (ediciones[p.id] ? { ...p, ...ediciones[p.id], editada: true } : p)),
+  ...plantillasPropias.map((p) => ({ ...p, propia: true })),
+];
+const plantillaActiva = () => todasLasPlantillas().find((p) => p.id === estado.plantilla) ?? null;
+
+/** Compara por bloques: el editor puede reordenar espacios sin que cambie el contenido. */
+const mismoContenido = (a, b) => JSON.stringify(analizarBloques(a ?? '')) === JSON.stringify(analizarBloques(b ?? ''));
+
+function hayCambiosEnPlantilla() {
+  const p = plantillaActiva();
+  if (!p) return false;
+  return (
+    !mismoContenido(p.cuerpo, estado.texto) ||
+    (p.titulo ?? '').trim() !== estado.encabezado.titulo.trim() ||
+    (p.subtitulo ?? '').trim() !== estado.encabezado.subtitulo.trim()
+  );
+}
+
+function pintarEstadoPlantilla() {
+  const p = plantillaActiva();
+  const cambios = hayCambiosEnPlantilla();
+  $('#cambiosPlantilla').hidden = !cambios;
+  $('#plantillaActiva').textContent = p ? p.nombre : 'Mensaje libre';
+  $('#plantillaActiva').title = p?.editada ? 'Plantilla incluida, con tus cambios guardados' : '';
+}
+
+function guardarEdiciones() {
+  if (!guardar(CLAVES.ediciones, ediciones)) aviso('No se pudieron guardar los cambios en este navegador.', { tipo: 'error' });
+  pintarPlantillas();
+  pintarEstadoPlantilla();
+}
+
+/** Guarda el contenido actual en la plantilla que se está usando (incluida o propia). */
+function guardarEnPlantilla() {
+  sincronizarEditores();
+  const p = plantillaActiva();
+  if (!p) return abrirDialogoPlantilla();
+  const datos = { titulo: estado.encabezado.titulo, subtitulo: estado.encabezado.subtitulo, cuerpo: estado.texto };
+  if (p.propia) {
+    const i = plantillasPropias.findIndex((x) => x.id === p.id);
+    plantillasPropias[i] = { ...plantillasPropias[i], ...datos };
+    guardarPlantillas();
+  } else {
+    ediciones[p.id] = { ...datos, editadaEn: new Date().toISOString() };
+    guardarEdiciones();
+  }
+  if (imagenesUsadas(datos.cuerpo).length) aviso('Nota: las imágenes pegadas no se guardan dentro de la plantilla.', { duracion: 5000 });
+  aviso(`Cambios guardados en «${p.nombre}».`, { tipo: 'exito' });
+  pintarEstadoPlantilla();
+}
+
+function restaurarPlantilla(id) {
+  const previa = ediciones[id];
+  if (!previa) return;
+  delete ediciones[id];
+  guardarEdiciones();
+  const original = PLANTILLAS.find((p) => p.id === id);
+  // Si es la plantilla abierta, el editor también vuelve al texto original.
+  const contenidoPrevio = estado.plantilla === id ? contenidoActual() : null;
+  if (contenidoPrevio && original) {
+    aplicarContenido({ texto: original.cuerpo, titulo: original.titulo ?? '', subtitulo: original.subtitulo ?? '', plantilla: id });
+  }
+  aviso(`«${original?.nombre ?? 'Plantilla'}» volvió a su versión original.`, {
+    accion: 'Deshacer',
+    alHacer: () => {
+      ediciones[id] = previa;
+      guardarEdiciones();
+      if (contenidoPrevio) aplicarContenido(contenidoPrevio);
+    },
+  });
+}
 
 function pintarPlantillas() {
   const filtro = $('#buscarPlantilla').value.trim().toLowerCase();
@@ -837,14 +913,28 @@ function pintarPlantillas() {
       if (!p.libre) {
         const vars = detectarVariables(p.cuerpo, p.titulo, p.subtitulo);
         const obligatorias = vars.filter((v) => !v.opcional && !v.predeterminado).length;
-        $('.ip-meta', nodo).textContent =
-          vars.length === 0 ? 'Sin datos que completar' : `${obligatorias} obligatorio${obligatorias === 1 ? '' : 's'} · ${vars.length - obligatorias} opcional${vars.length - obligatorias === 1 ? '' : 'es'}`;
+        const meta = $('.ip-meta', nodo);
+        meta.textContent =
+          vars.length === 0
+            ? 'Sin datos que completar'
+            : `${obligatorias} obligatorio${obligatorias === 1 ? '' : 's'} · ${vars.length - obligatorias} opcional${vars.length - obligatorias === 1 ? '' : 'es'}`;
+        if (p.editada) {
+          const marca = document.createElement('span');
+          marca.className = 'ip-editada';
+          marca.textContent = 'Editada';
+          meta.append(marca);
+        }
       } else $('.ip-meta', nodo).remove();
       $('.ip-usar', nodo).addEventListener('click', () => (p.libre ? usarMensajeLibre() : usarPlantilla(p)));
       if (p.propia) {
         const eliminar = $('.ip-eliminar', nodo);
         eliminar.hidden = false;
         eliminar.addEventListener('click', () => eliminarPlantilla(p.id));
+      }
+      if (p.editada) {
+        const restaurar = $('.ip-restaurar', nodo);
+        restaurar.hidden = false;
+        restaurar.addEventListener('click', () => restaurarPlantilla(p.id));
       }
       nodos.push(nodo);
     }
@@ -863,9 +953,9 @@ function pintarPlantillas() {
 }
 
 function pintarPlantillaActiva() {
-  const activa = todasLasPlantillas().find((p) => p.id === estado.plantilla);
+  const activa = plantillaActiva();
   for (const item of $$('.item-plantilla')) item.classList.toggle('activa', item.dataset.id === (activa?.id ?? ''));
-  $('#plantillaActiva').textContent = activa ? activa.nombre : 'Mensaje libre';
+  pintarEstadoPlantilla();
 }
 
 function cerrarCajonEnPantallaChica() {
@@ -899,13 +989,14 @@ function guardarPlantillas() {
 }
 
 function abrirDialogoPlantilla() {
+  sincronizarEditores();
   if (!estado.texto.trim()) return aviso('Escribe un mensaje antes de guardarlo como plantilla.', { tipo: 'alerta' });
   const dialogo = $('#dialogoPlantilla');
   const formulario = $('form', dialogo);
   formulario.reset();
   const propia = plantillasPropias.find((p) => p.id === estado.plantilla);
   formulario.nombre.value = propia?.nombre ?? estado.encabezado.titulo.replace(/\{\{[^}]*\}\}/g, '').replace(/[·\s]+$/, '').trim().slice(0, 80);
-  formulario.categoria.value = propia?.categoria ?? '';
+  formulario.categoria.value = propia?.categoria ?? plantillaActiva()?.categoria ?? '';
   dialogo.showModal();
   formulario.nombre.select();
 }
@@ -951,28 +1042,49 @@ function eliminarPlantilla(id) {
   });
 }
 
+/** Exporta las plantillas propias y las incluidas que editaste (para compartir con el equipo). */
 function exportarPlantillas() {
-  if (!plantillasPropias.length) return aviso('Aún no tienes plantillas propias para exportar.');
-  descargarArchivo('plantillas-redacta.json', JSON.stringify(plantillasPropias, null, 2), 'application/json');
+  const editadas = Object.entries(ediciones).map(([id, e]) => {
+    const original = PLANTILLAS.find((p) => p.id === id);
+    return { base: id, nombre: original?.nombre ?? id, categoria: original?.categoria ?? '', titulo: e.titulo, subtitulo: e.subtitulo, cuerpo: e.cuerpo };
+  });
+  const lista = [...plantillasPropias, ...editadas];
+  if (!lista.length) return aviso('Aún no tienes plantillas propias ni editadas para exportar.');
+  descargarArchivo('plantillas-redacta.json', JSON.stringify(lista, null, 2), 'application/json');
 }
 
 async function importarPlantillas(archivo) {
   try {
     const datos = JSON.parse(await archivo.text());
-    const lista = (Array.isArray(datos) ? datos : [datos]).filter(esPlantillaValida).map((p) => ({
-      id: `propia-${Math.random().toString(36).slice(2, 10)}`,
-      nombre: String(p.nombre).slice(0, 80),
-      categoria: String(p.categoria ?? '').slice(0, 40),
-      descripcion: String(p.descripcion ?? '').slice(0, 200),
-      titulo: String(p.titulo ?? ''),
-      subtitulo: String(p.subtitulo ?? ''),
-      cuerpo: String(p.cuerpo),
-    }));
-    if (!lista.length) return aviso('El archivo no tiene plantillas válidas.', { tipo: 'error' });
-    const nombres = new Set(lista.map((p) => p.nombre.toLowerCase()));
-    plantillasPropias = [...lista, ...plantillasPropias.filter((p) => !nombres.has(p.nombre.toLowerCase()))];
+    const validas = (Array.isArray(datos) ? datos : [datos]).filter(esPlantillaValida);
+    let editadas = 0;
+    const propias = [];
+    for (const p of validas) {
+      const limpia = {
+        titulo: String(p.titulo ?? ''),
+        subtitulo: String(p.subtitulo ?? ''),
+        cuerpo: String(p.cuerpo),
+      };
+      if (p.base && PLANTILLAS.some((x) => x.id === p.base)) {
+        ediciones[p.base] = { ...limpia, editadaEn: new Date().toISOString() };
+        editadas++;
+      } else {
+        propias.push({
+          id: `propia-${Math.random().toString(36).slice(2, 10)}`,
+          nombre: String(p.nombre).slice(0, 80),
+          categoria: String(p.categoria ?? '').slice(0, 40),
+          descripcion: String(p.descripcion ?? '').slice(0, 200),
+          ...limpia,
+        });
+      }
+    }
+    if (!propias.length && !editadas) return aviso('El archivo no tiene plantillas válidas.', { tipo: 'error' });
+    const nombres = new Set(propias.map((p) => p.nombre.toLowerCase()));
+    plantillasPropias = [...propias, ...plantillasPropias.filter((p) => !nombres.has(p.nombre.toLowerCase()))];
+    guardar(CLAVES.ediciones, ediciones);
     guardarPlantillas();
-    aviso(lista.length === 1 ? '1 plantilla importada.' : `${lista.length} plantillas importadas.`, { tipo: 'exito' });
+    const total = propias.length + editadas;
+    aviso(total === 1 ? '1 plantilla importada.' : `${total} plantillas importadas.`, { tipo: 'exito' });
   } catch {
     aviso('No se pudo leer el archivo. Debe ser un .json exportado desde Redacta.', { tipo: 'error' });
   }
@@ -1041,7 +1153,28 @@ const ACCIONES = {
   'cerrar-plantillas': () => alternarPlantillas(false),
   guia: () => $('#dialogoGuia').showModal(),
   'alternar-codigo': () => cambiarModoEditor(modoEditor === 'codigo' ? 'visual' : 'codigo'),
+  'guardar-en-plantilla': guardarEnPlantilla,
 };
+
+// ───────────────────────── Barra de tabla ─────────────────────────
+
+let celdaDeLaBarra = null;
+
+function pintarBarraDeTabla() {
+  const barra = $('#barraTabla');
+  const celda = modoEditor === 'visual' ? celdaActual(editorCuerpo.el) : null;
+  celdaDeLaBarra = celda;
+  if (!celda) {
+    barra.hidden = true;
+    return;
+  }
+  const tabla = celda.closest('table');
+  barra.hidden = false;
+  const documento = editorCuerpo.el;
+  const arriba = documento.offsetTop + tabla.offsetTop - barra.offsetHeight - 8;
+  barra.style.top = `${Math.max(4, arriba)}px`;
+  barra.style.left = `${documento.offsetLeft + tabla.offsetLeft}px`;
+}
 
 function enlazarEventos() {
   enlazarMenus(document);
@@ -1091,6 +1224,19 @@ function enlazarEventos() {
   // Estado de la barra (negrita activa, estilo del párrafo) según el cursor.
   document.addEventListener('selectionchange', () => {
     if (editores.some((ed) => ed.el.contains(document.activeElement))) pintarEstiloActual();
+    if (document.activeElement === editorCuerpo.el) pintarBarraDeTabla();
+  });
+  editorCuerpo.el.addEventListener('blur', () => {
+    // Deja la barra visible mientras se usa (sus botones no roban el foco).
+    setTimeout(() => !editorCuerpo.el.contains(document.activeElement) && !$('#barraTabla').matches(':hover') && ($('#barraTabla').hidden = true), 150);
+  });
+  $('#barraTabla').addEventListener('mousedown', (e) => e.preventDefault());
+  $('#barraTabla').addEventListener('click', (e) => {
+    const boton = e.target.closest('[data-tabla]');
+    if (!boton || !celdaDeLaBarra?.isConnected) return;
+    operarTabla(editorCuerpo, boton.dataset.tabla, celdaDeLaBarra);
+    editorCuerpo.el.focus();
+    pintarBarraDeTabla();
   });
 
   // Atajo Ctrl+K (enlace) en el editor visual.
@@ -1171,6 +1317,10 @@ function enlazarEventos() {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       copiarCorreo();
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      guardarEnPlantilla();
     }
     if (e.altKey && !e.ctrlKey && (e.key === '1' || e.key === '2')) {
       e.preventDefault();

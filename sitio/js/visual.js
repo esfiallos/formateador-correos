@@ -489,6 +489,130 @@ export function aplicarComandoVisual(editor, nombre) {
   return false;
 }
 
+// ───────────────────────── Tablas ─────────────────────────
+
+/** Celda (td/th) donde está el cursor, si está dentro del editor. */
+export function celdaActual(el) {
+  const rango = rangoDentro(el);
+  let n = rango?.startContainer;
+  if (n?.nodeType === 3) n = n.parentElement;
+  const celda = n?.closest?.('td, th');
+  return celda && el.contains(celda) ? celda : null;
+}
+
+function celdaVacia(etiqueta) {
+  const celda = document.createElement(etiqueta);
+  celda.append(document.createElement('br'));
+  return celda;
+}
+
+function filaVacia(columnas) {
+  const fila = document.createElement('tr');
+  for (let i = 0; i < columnas; i++) fila.append(celdaVacia('td'));
+  return fila;
+}
+
+/** Agrega o quita filas y columnas de la tabla donde está el cursor. */
+export function operarTabla(editor, accion, celda = celdaActual(editor.el)) {
+  if (!celda) return;
+  const tabla = celda.closest('table');
+  const fila = celda.closest('tr');
+  const columna = celda.cellIndex;
+  const enCabecera = fila.parentElement.tagName === 'THEAD';
+  const columnas = Math.max(...[...tabla.rows].map((r) => r.cells.length));
+  let destino = null;
+
+  const cuerpo = () => {
+    let tbody = tabla.tBodies[0];
+    if (!tbody) {
+      tbody = document.createElement('tbody');
+      tabla.append(tbody);
+    }
+    return tbody;
+  };
+
+  switch (accion) {
+    case 'fila-arriba':
+    case 'fila-abajo': {
+      const nueva = filaVacia(columnas);
+      if (enCabecera) cuerpo().prepend(nueva);
+      else if (accion === 'fila-arriba') fila.before(nueva);
+      else fila.after(nueva);
+      destino = nueva.cells[Math.min(columna, nueva.cells.length - 1)];
+      break;
+    }
+    case 'quitar-fila': {
+      const filas = [...tabla.rows];
+      const i = filas.indexOf(fila);
+      const vecina = filas[i + 1] ?? filas[i - 1];
+      fila.parentElement.removeChild(fila);
+      if (tabla.tHead && !tabla.tHead.rows.length) tabla.deleteTHead();
+      if (!tabla.rows.length) return quitarTabla(editor, tabla);
+      destino = vecina?.cells[Math.min(columna, vecina.cells.length - 1)];
+      break;
+    }
+    case 'columna-izquierda':
+    case 'columna-derecha':
+      for (const r of tabla.rows) {
+        const nueva = celdaVacia(r.parentElement.tagName === 'THEAD' ? 'th' : 'td');
+        const referencia = r.cells[Math.min(columna, r.cells.length - 1)];
+        if (!referencia) r.append(nueva);
+        else if (accion === 'columna-izquierda') referencia.before(nueva);
+        else referencia.after(nueva);
+      }
+      destino = fila.cells[accion === 'columna-izquierda' ? columna : columna + 1];
+      break;
+    case 'quitar-columna':
+      if (columnas <= 1) return quitarTabla(editor, tabla);
+      for (const r of tabla.rows) r.cells[columna]?.parentElement.removeChild(r.cells[columna]);
+      destino = fila.cells[Math.min(columna, fila.cells.length - 1)];
+      break;
+    case 'cabecera': {
+      // Convierte la primera fila en encabezado (o al revés).
+      if (tabla.tHead) {
+        const primera = tabla.tHead.rows[0];
+        const nueva = document.createElement('tr');
+        for (const c of [...primera.cells]) {
+          const td = document.createElement('td');
+          td.append(...c.childNodes);
+          nueva.append(td);
+        }
+        tabla.deleteTHead();
+        cuerpo().prepend(nueva);
+      } else {
+        const primera = tabla.rows[0];
+        const thead = tabla.createTHead();
+        const nueva = document.createElement('tr');
+        for (const c of [...primera.cells]) {
+          const th = document.createElement('th');
+          th.append(...c.childNodes);
+          nueva.append(th);
+        }
+        primera.parentElement.removeChild(primera);
+        thead.append(nueva);
+      }
+      destino = tabla.rows[0]?.cells[0];
+      break;
+    }
+    case 'quitar-tabla':
+      return quitarTabla(editor, tabla);
+    default:
+      return;
+  }
+  if (destino) cursorAlFinal(destino);
+  editor.el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function quitarTabla(editor, tabla) {
+  if (!tabla?.isConnected) return true;
+  const p = document.createElement('p');
+  p.append(document.createElement('br'));
+  tabla.replaceWith(p);
+  cursorAlFinal(p);
+  editor.el.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+}
+
 /** Estado de la barra según el cursor: negrita activa, estilo del párrafo… */
 export function estadoDeLaBarra(editor) {
   const consultar = (cmd) => {

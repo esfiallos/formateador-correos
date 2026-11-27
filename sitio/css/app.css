@@ -2644,6 +2644,133 @@ th .chip-var,
   }
 }
 
+/* ═══════════════ Barra de tabla ═══════════════ */
+
+.barra-tabla {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: calc(100% - 24px);
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: var(--texto);
+  box-shadow: var(--sombra-flotante);
+  animation: aparecer 140ms ease-out;
+}
+
+.barra-tabla button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #fff;
+  font: 600 12px var(--fuente);
+  white-space: nowrap;
+}
+
+.barra-tabla button:hover {
+  background: rgb(255 255 255 / 14%);
+}
+
+.barra-tabla button.peligro:hover {
+  background: #b3362f;
+}
+
+.barra-tabla-titulo {
+  padding: 0 4px 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a9b4c8;
+}
+
+.barra-tabla-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: rgb(255 255 255 / 18%);
+}
+
+/* ═══════════════ Plantillas: cambios y ediciones ═══════════════ */
+
+.cambios-plantilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--calido-hover);
+  white-space: nowrap;
+  animation: aparecer 160ms ease-out;
+}
+
+.punto-cambios {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--calido);
+  box-shadow: 0 0 0 3px rgb(192 103 58 / 18%);
+}
+
+.boton-chico {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  gap: 5px;
+}
+
+.plantilla-activa {
+  flex: 0 1 auto;
+}
+
+.hoja-encabezado-fila .interruptor-chico {
+  margin-left: auto;
+}
+
+.ip-editada {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--acento-suave);
+  color: var(--acento);
+  font-size: 10.5px;
+}
+
+.ip-restaurar {
+  margin: 6px 0 0;
+  opacity: 0;
+}
+
+.item-plantilla:hover .ip-restaurar,
+.ip-restaurar:focus-visible {
+  opacity: 1;
+}
+
+.ip-restaurar:hover {
+  color: var(--acento);
+  background: var(--acento-suave);
+}
+
+@media (max-width: 640px) {
+  .cambios-plantilla {
+    font-size: 0;
+    gap: 4px;
+  }
+
+  .cambios-plantilla .boton-chico {
+    font-size: 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

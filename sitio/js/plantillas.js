@@ -1,42 +1,112 @@
-// Plantillas del NOC. Cada una pide solo lo que cambia en su contexto; el resto es texto profesional fijo.
-// {{Campo}}           obligatoria (si falta, se resalta en amarillo)
-// {{Campo?}}          opcional (vacía, se quita su línea completa)
+// Plantillas del NOC. Cada una pide solo lo que cambia en su contexto; el resto es texto fijo.
+// {{Campo}}           obligatoria (si falta, se resalta)
+// {{Campo?}}          opcional (vacía, se quita su línea, y su tabla o sección si quedan vacías)
 // {{Campo|valor}}     con valor predeterminado
+// {{Campo|a;b;c}}     lista de opciones
 // Una variable sola en su línea pide un campo grande (listados, avances, payload; admite tablas de Excel).
 // {{hoy}}, {{fecha}} y {{hora}} se completan solas.
+//
+// Tono: cercano y claro. Primera persona y voz activa, frases cortas, sin fórmulas como «por medio del
+// presente». Cada correo dice qué sabemos, qué estamos haciendo y qué sigue (y cuándo), y cierra
+// invitando a responder.
 
 export const PLANTILLAS = [
   {
     id: 'inicio-caso',
     nombre: 'Inicio de caso',
     categoria: 'Casos',
-    descripcion: 'Confirma que el equipo técnico recibió el caso y comenzó las revisiones.',
-    titulo: 'Caso recibido · Ticket {{Ticket}}',
-    subtitulo: '{{Cliente}} · ID {{ID}}',
-    cuerpo: `Estimados,
+    descripcion: 'Confirma que el caso ya está en manos de un técnico y que empezó la revisión.',
+    titulo: 'Ya estamos trabajando en su caso',
+    subtitulo: 'Ticket {{Ticket}} · {{Cliente}}',
+    cuerpo: `Hola, {{Contacto|equipo}}:
 
-Les confirmamos que el caso reportado por **{{Cliente}}** fue recibido y asignado a nuestro equipo técnico, que ya inició las revisiones correspondientes.
+Recibimos su reporte y ya está en manos de nuestro equipo técnico. **{{Técnico asignado}}** está a cargo y comenzó a revisarlo en este momento.
 
 | Detalle | Información |
 |---|---|
 | Cliente | {{Cliente}} |
 | Ticket | **{{Ticket}}** |
 | ID | {{ID}} |
-| Técnico asignado | {{Técnico asignado}} |
+| Responsable | {{Técnico asignado}} |
 | Estado | En revisión |
 
-Durante la atención les compartiremos las actualizaciones por este medio. Agradecemos conservar el número de ticket como referencia para cualquier consulta.`,
+Les escribiremos con la primera actualización en cuanto tengamos novedades. Si quieren agregar algún detalle, basta con responder este correo.`,
+  },
+  {
+    id: 'actualizacion',
+    nombre: 'Actualización del caso',
+    categoria: 'Casos',
+    descripcion: 'Cuenta cómo va el caso: estado, avances y qué sigue.',
+    titulo: 'Así va su caso',
+    subtitulo: 'Ticket {{Ticket?}}',
+    cuerpo: `Hola, {{Contacto|equipo}}:
+
+Les comparto cómo avanza la atención de su caso.
+
+**Estado actual:** {{Estado actual|En revisión}}
+
+## Lo que hemos avanzado
+{{Avances}}
+
+## Lo que sigue
+{{Próximos pasos?}}
+
+Seguimos trabajando en ello y les vuelvo a escribir {{Próxima actualización|en cuanto tenga novedades}}. Cualquier duda, respondan este correo.`,
+  },
+  {
+    id: 'validacion',
+    nombre: 'Validación del servicio',
+    categoria: 'Casos',
+    descripcion: 'El servicio quedó operativo: qué pasó, qué hicimos y cómo lo comprobamos.',
+    titulo: 'Su servicio ya está operativo',
+    subtitulo: 'Ticket {{Ticket?}}',
+    cuerpo: `Hola, {{Contacto|equipo}}:
+
+Buenas noticias: resolvimos el problema y, según nuestro monitoreo, el servicio ya funciona con normalidad.
+
+✓ Servicio operativo según nuestro monitoreo.
+
+## Qué ocurrió
+{{Causa}}
+
+## Qué hicimos
+{{Resolución}}
+
+## Cómo lo comprobamos
+{{Pruebas realizadas}}
+
+> ¿Nos ayudan a confirmarlo de su lado? Con su visto bueno cerramos el caso. Si notan cualquier detalle, respondan este correo y lo revisamos de inmediato.`,
+  },
+  {
+    id: 'seguimiento',
+    nombre: 'Seguimiento del caso',
+    categoria: 'Casos',
+    descripcion: 'Pide verificar las pruebas y confirmar que todo opera bien, o reportar fallas.',
+    titulo: '¿Todo sigue funcionando bien?',
+    subtitulo: 'Ticket {{Ticket?}}',
+    cuerpo: `Hola, {{Contacto|equipo}}:
+
+Les escribo para confirmar que todo siga en orden después de la atención de su caso.
+
+{{Comentario adicional?}}
+
+## ¿Nos ayudan a validar?
+1. Que las pruebas del servicio se completen sin errores.
+2. Que el servicio opere con normalidad, sin cortes ni lentitud.
+3. Si notan cualquier falla o comportamiento extraño, cuéntennos qué pasó y a qué hora, y lo revisamos enseguida.
+
+> Si todo está bien, con una respuesta breve nos basta para cerrar el caso.`,
   },
   {
     id: 'revision-interna',
     nombre: 'Escalamiento a área interna',
     categoria: 'Escalamientos',
     descripcion: 'Pide a CORE IP, CORE CS, TX o Soporte Digital que revise el caso. Solo el área es obligatoria.',
-    titulo: 'Solicitud de revisión · {{Área|CORE IP;CORE CS;TX;Soporte Digital}}',
+    titulo: 'Necesitamos su apoyo · {{Área|CORE IP;CORE CS;TX;Soporte Digital}}',
     subtitulo: '{{Cliente?}}',
-    cuerpo: `Estimado equipo de {{Área|CORE IP;CORE CS;TX;Soporte Digital}},
+    cuerpo: `Hola, equipo de {{Área|CORE IP;CORE CS;TX;Soporte Digital}}:
 
-Por medio del presente solicitamos su apoyo para revisar el siguiente caso, que requiere la validación de su área para continuar con la atención.
+Necesitamos su apoyo con este caso. Desde el NOC ya hicimos la revisión inicial y ahora requiere la validación de su área para avanzar.
 
 | Detalle | Información |
 |---|---|
@@ -45,24 +115,24 @@ Por medio del presente solicitamos su apoyo para revisar el siguiente caso, que 
 | ID de enlace | {{ID de enlace?}} |
 | Ticket | {{Ticket?}} |
 
-## Comentarios del cliente
+## Lo que reporta el cliente
 {{Comentarios del cliente?}}
 
-## Revisiones realizadas
+## Lo que ya revisamos
 {{Revisiones realizadas?}}
 
-Agradecemos su pronta revisión y quedamos atentos a sus comentarios para dar continuidad al caso.`,
+¿Nos avisan cuando lo tomen? Quedamos atentos para apoyar con pruebas o lo que necesiten.`,
   },
   {
     id: 'escalado-partner',
     nombre: 'Caso escalado al partner',
     categoria: 'Escalamientos',
-    descripcion: 'Informa al cliente que su caso fue escalado al partner para revisión especializada.',
-    titulo: 'Su caso fue escalado',
+    descripcion: 'Avisa al cliente que su caso pasó al partner, y que seguimos a cargo del seguimiento.',
+    titulo: 'Escalamos su caso para resolverlo antes',
     subtitulo: 'Ticket {{Ticket?}}',
-    cuerpo: `Estimado(a) {{Cliente|cliente}},
+    cuerpo: `Hola, {{Cliente|equipo}}:
 
-Le informamos que, como parte de la atención de su caso, este fue **escalado a {{Partner|nuestro partner}}** para su revisión especializada.
+Para avanzar más rápido, escalamos su caso a **{{Partner|nuestro partner}}**, que cuenta con el equipo especializado para revisarlo a fondo.
 
 | Detalle | Información |
 |---|---|
@@ -72,18 +142,18 @@ Le informamos que, como parte de la atención de su caso, este fue **escalado a 
 
 {{Comentario adicional?}}
 
-> Nuestro equipo continuará dando seguimiento con el partner y le compartirá las actualizaciones por este medio hasta la resolución del caso.`,
+> Nosotros seguimos siendo su punto de contacto: damos seguimiento con el partner y les mantenemos al tanto por este medio hasta que quede resuelto.`,
   },
   {
     id: 'entrega-partner',
     nombre: 'Entrega de información al partner',
     categoria: 'Escalamientos',
-    descripcion: 'Envía al partner la información que solicitó (texto, tablas o capturas).',
-    titulo: 'Información solicitada',
+    descripcion: 'Envía al partner lo que pidió (texto, tablas o capturas).',
+    titulo: 'Información para continuar con el caso',
     subtitulo: 'Referencia {{Referencia del partner?}}',
-    cuerpo: `Estimado equipo de {{Partner}},
+    cuerpo: `Hola, equipo de {{Partner}}:
 
-En atención a su solicitud, compartimos la información requerida para continuar con la revisión del caso.
+Gracias por la revisión. Les compartimos la información que nos pidieron para continuar con el caso.
 
 | Detalle | Información |
 |---|---|
@@ -95,18 +165,18 @@ En atención a su solicitud, compartimos la información requerida para continua
 ## Información solicitada
 {{Información solicitada}}
 
-Quedamos atentos a cualquier dato adicional que requieran para avanzar con la atención.`,
+Si necesitan algún dato más o hacer pruebas en conjunto, nos avisan y lo coordinamos.`,
   },
   {
     id: 'caso-escalado',
     nombre: 'Caso escalado (informativo)',
     categoria: 'Escalamientos',
-    descripcion: 'Informativo: texto formal de escalamiento y el payload que pegues.',
-    titulo: 'Notificación de escalamiento',
+    descripcion: 'Informativo: una introducción breve y el detalle que pegues tal cual.',
+    titulo: 'Caso escalado',
     subtitulo: '{{hoy}}',
-    cuerpo: `Estimados,
+    cuerpo: `Hola, equipo:
 
-Por medio del presente se notifica el escalamiento del siguiente caso para su conocimiento y gestión. A continuación se comparte el detalle reportado:
+Les comparto este caso escalado para su conocimiento y gestión. Abajo va el detalle tal como se reportó.
 
 ---
 
@@ -114,18 +184,18 @@ Por medio del presente se notifica el escalamiento del siguiente caso para su co
 
 ---
 
-Quedamos atentos a cualquier requerimiento adicional y continuaremos dando seguimiento hasta su resolución.`,
+Seguimos de cerca la atención y cualquier novedad la compartimos por este medio.`,
   },
   {
     id: 'accesos',
     nombre: 'Solicitud de accesos',
     categoria: 'Accesos',
-    descripcion: 'Texto formal de solicitud y el listado de técnicos (pégalo desde Excel).',
-    titulo: 'Solicitud de accesos',
+    descripcion: 'Pide acceso para el personal técnico; pega el listado desde Excel.',
+    titulo: 'Solicitud de acceso para personal técnico',
     subtitulo: '{{Sitio o sistema?}}',
-    cuerpo: `Estimados,
+    cuerpo: `Hola, {{Destinatario|equipo}}:
 
-Por medio del presente solicitamos su apoyo para gestionar el acceso del personal técnico detallado a continuación, con el fin de realizar las labores operativas asignadas.
+Les escribimos para solicitar acceso para el personal técnico que aparece abajo, que necesita ingresar para realizar labores operativas.
 
 Sitio o sistema: **{{Sitio o sistema?}}**
 Fecha y horario: **{{Fecha y horario?}}**
@@ -133,88 +203,24 @@ Fecha y horario: **{{Fecha y horario?}}**
 ## Personal técnico
 {{Listado de técnicos}}
 
-Agradecemos de antemano su gestión y quedamos atentos a la confirmación de los accesos.`,
+¿Nos confirman cuando el acceso esté autorizado? Si falta algún dato de las personas, con gusto lo completamos.`,
   },
   {
     id: 'falta-recursos',
     nombre: 'Falta de recursos',
     categoria: 'Gestión',
-    descripcion: 'Informa los recursos que faltan para continuar con la atención.',
-    titulo: 'Falta de recursos para la atención',
+    descripcion: 'Avisa que la atención está detenida y qué se necesita para continuar.',
+    titulo: 'Necesitamos apoyo para continuar',
     subtitulo: 'Ticket {{Ticket?}}',
-    cuerpo: `Estimados,
+    cuerpo: `Hola, {{Destinatario|equipo}}:
 
-Les informamos que, para continuar con la atención del caso, actualmente no contamos con los recursos detallados a continuación:
+Queremos avisarles que la atención de este caso está detenida: para continuar necesitamos los siguientes recursos, con los que hoy no contamos.
 
 {{Recursos faltantes}}
 
 ! {{Impacto?}}
 
-Solicitamos su apoyo para gestionar la disponibilidad de estos recursos a la brevedad. Retomaremos la atención en cuanto estén disponibles.`,
-  },
-  {
-    id: 'actualizacion',
-    nombre: 'Actualización del caso',
-    categoria: 'Casos',
-    descripcion: 'Comparte los avances presentados y el estado actual.',
-    titulo: 'Actualización del caso',
-    subtitulo: 'Ticket {{Ticket?}}',
-    cuerpo: `Estimados,
-
-Compartimos la actualización del caso con los avances realizados a la fecha.
-
-Estado actual: **{{Estado actual|En revisión}}**
-
-## Avances
-{{Avances}}
-
-Continuaremos trabajando en el caso y les mantendremos informados sobre cualquier novedad.`,
-  },
-  {
-    id: 'validacion',
-    nombre: 'Validación del servicio',
-    categoria: 'Casos',
-    descripcion: 'Causa, resolución y pruebas realizadas; pide validar para cerrar.',
-    titulo: 'Validación del servicio',
-    subtitulo: 'Ticket {{Ticket?}}',
-    cuerpo: `Estimados,
-
-Les informamos que el caso fue atendido y, de acuerdo con nuestras validaciones, el servicio se encuentra operativo.
-
-✓ Servicio operativo según nuestro monitoreo.
-
-A continuación se detalla la atención realizada:
-
-## Causa
-{{Causa}}
-
-## Resolución
-{{Resolución}}
-
-## Pruebas realizadas
-{{Pruebas realizadas}}
-
-> Les solicitamos validar el servicio de su lado y confirmarnos que opera con normalidad para proceder con el cierre del caso.`,
-  },
-  {
-    id: 'seguimiento',
-    nombre: 'Seguimiento del caso',
-    categoria: 'Casos',
-    descripcion: 'Pide verificar pruebas y confirmar que todo opera sin problemas, o reportarlos.',
-    titulo: 'Seguimiento del caso',
-    subtitulo: 'Ticket {{Ticket?}}',
-    cuerpo: `Estimados,
-
-Damos seguimiento al caso atendido recientemente con el fin de confirmar que el servicio continúa operando con normalidad.
-
-{{Comentario adicional?}}
-
-## Validación solicitada
-1. Verificar que las pruebas del servicio se completen de forma satisfactoria.
-2. Confirmar que el servicio se encuentra operativo y sin inconvenientes.
-3. En caso de presentar alguna falla o comportamiento irregular, reportarlo por este medio indicando el detalle y la hora en que se presentó.
-
-> Si no se presentan inconvenientes, agradeceremos su confirmación para proceder con el cierre del caso.`,
+¿Nos ayudan a gestionarlos? En cuanto estén disponibles retomamos la atención y les avisamos.`,
   },
 ];
 
@@ -222,23 +228,22 @@ Damos seguimiento al caso atendido recientemente con el fin de confirmar que el 
 export const EJEMPLO_INICIAL = {
   titulo: 'Te damos la bienvenida a Redacta',
   subtitulo: 'Formateador de correos del NOC',
-  texto: `Hola {{Nombre|equipo}},
+  texto: `Hola, {{Nombre|equipo}}:
 
-Pega aquí tu texto y obtén un correo con **formato profesional**, listo para *copiar y pegar* en Outlook.
+Escribe o pega aquí tu texto: lo que ves es como quedará el correo, listo para *copiar y pegar* en Outlook.
 
-## Qué puedes usar
-- Títulos con # y ##
-- Listas con guiones o números
-- Enlaces como [este](https://outlook.com) y ==texto resaltado==
-- Notas con > y avisos con !
+## Qué puedes hacer
+- Dar formato con la barra: títulos, listas, **negritas**, ==resaltados== y enlaces
+- Insertar recuadros, tablas, botones y capturas (pégalas con Ctrl+V)
+- Usar datos como {{Nombre|equipo}}: aparecen como campos a la derecha
 
-> Las palabras entre llaves son variables: {{Nombre|equipo}} pide un campo y {{Dato opcional?}} desaparece si lo dejas vacío.
+> Elige una plantilla a la izquierda para empezar más rápido, o guarda la tuya cuando la tengas lista.
 
-| Formato | Cómo se escribe |
+| Atajo | Qué hace |
 |---|---|
-| Negrita | dos asteriscos a cada lado |
-| Botón | [[Texto\\|enlace]] en su propia línea |
-| Tabla | filas con barras, o pegada desde Excel |
+| Ctrl+Enter | Copia el correo |
+| Ctrl+S | Guarda los cambios en la plantilla |
+| Alt+2 | Ver el diseño y la vista previa |
 
-Usa la pestaña **Plantillas** para los correos del NOC o para guardar los tuyos. Cuando termines, pulsa **Copiar correo**.`,
+Cuando termines, pulsa **Copiar correo** y pégalo en tu mensaje.`,
 };
