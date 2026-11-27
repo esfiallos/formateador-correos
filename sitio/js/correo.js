@@ -257,37 +257,102 @@ export const LENGUAJES = {
   linux: { nombre: 'Linux', prompt: /^((?:\[[^\]\n]+\]|[\w.-]+@[\w.-]+(?::[^\s$#]*)?)?\s?[$#])(\s.*|)$/, comentario: /^\s*\/\// },
 };
 
-const COLORES_CODIGO = { fondo: '#1a2433', cabecera: '#243247', texto: '#c9d4e3', prompt: '#7ee2b8', comando: '#ffffff', comentario: '#8796ab' };
+/** Sin equipo elegido: comentarios con # o // y prompts $ / # / >. */
+const GENERICO = { prompt: /^((?:[\w.@:~/-]*\s?)?[$#>])(\s.*|)$/, comentario: /^\s*(?:\/\/|--)/ };
+
+const COLORES_CODIGO = {
+  fondo: '#1a2433',
+  cabecera: '#243247',
+  texto: '#c9d4e3',
+  prompt: '#7ee2b8',
+  comando: '#ffffff',
+  verbo: '#82aaff',
+  ip: '#f2c47e',
+  interfaz: '#c3a6ff',
+  cadena: '#e6b673',
+  numero: '#f7a072',
+  arriba: '#7ee2b8',
+  abajo: '#ff8a80',
+  comentario: '#8796ab',
+};
 
 function espaciosVisibles(html) {
   return html.replace(/\t/g, '    ').replace(/ {2,}/g, (m) => '&nbsp;'.repeat(m.length)).replace(/^ /, '&nbsp;');
 }
 
-/** Una línea de comandos → HTML: prompt en verde, comando en blanco, salida en gris, comentarios atenuados. */
-export function resaltarLinea(linea, lenguaje) {
-  if (!linea) return '&nbsp;';
-  const conf = LENGUAJES[lenguaje];
+const MONO = "Consolas,'Courier New',Menlo,monospace";
+
+/** Texto con su estilo completo: Outlook (Word) no hereda color ni fuente de la celda al pegar. */
+function trozo(texto, color, extra = '') {
+  return `<span style="font-family:${MONO};font-size:13px;color:${color};${extra}">${espaciosVisibles(escaparHtml(texto))}</span>`;
+}
+
+// Fichas que se resaltan dentro de un comando o de su salida (el orden importa: la primera que coincide gana).
+const FICHAS = [
+  ['cadena', /"(?:[^"\\\n]|\\.)*"|'[^'\n]*'/],
+  ['ip', /\b[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}\b|\b[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}\b/i],
+  ['ip', /\b\d{1,3}(?:\.\d{1,3}){3}(?:\/\d{1,2})?\b|\b[0-9a-f]{1,4}(?::[0-9a-f]{0,4}){2,7}(?:\/\d{1,3})?(?![\w:])/i],
+  [
+    'interfaz',
+    /\b(?:(?:Hundred|Forty|TwentyFive|Ten)?Gig(?:abit)?E(?:thernet)?|TenGigE|FastEthernet|Ethernet|Eth-Trunk|Port-channel|Bundle-Ether|Vlanif|Vlan|Loop[Bb]ack|Tunnel|NULL|BVI|XGE|GE|Gi|Te|Fa|Eth|Po|Lo|Tu|ether|sfp(?:-sfpplus)?|wlan|bond|eth|ens|enp|eno|br|lo)\s?\d+(?:[/.:]\d+|s\d+)*\b/,
+  ],
+  ['arriba', /\b(?:up|connected|established|enabled|running|active|full|reachable|success)\b/i],
+  ['abajo', /\b(?:administratively\s+down|down|notconnect|err-disabled|disabled|failed|failure|error|errors|unreachable|timeout|dropped|idle|\*down)\b/i],
+  ['numero', /\b\d+(?:\.\d+)?(?:%|ms|[KMG]b?)?(?![\w.])/],
+];
+const RE_FICHAS = new RegExp(FICHAS.map(([, re]) => `(${re.source})`).join('|'), 'gi');
+
+/** Divide el texto en fichas coloreadas; lo demás queda en el color base. */
+function colorearFichas(texto, base, extra = '') {
   const c = COLORES_CODIGO;
-  if (conf?.comentario.test(linea)) return `<span style="color:${c.comentario};font-style:italic;">${espaciosVisibles(escaparHtml(linea))}</span>`;
-  const m = conf?.prompt.exec(linea);
-  if (m) {
-    return (
-      `<span style="color:${c.prompt};">${espaciosVisibles(escaparHtml(m[1]))}</span>` +
-      `<span style="color:${c.comando};font-weight:bold;">${espaciosVisibles(escaparHtml(m[2]))}</span>`
-    );
+  let html = '';
+  let ultimo = 0;
+  for (const m of texto.matchAll(RE_FICHAS)) {
+    const i = m.slice(1).findIndex((g) => g !== undefined);
+    const tipo = FICHAS[i][0];
+    // Las fichas sensibles a mayúsculas (interfaces) no deben coincidir en minúsculas arbitrarias.
+    if (tipo === 'interfaz' && !FICHAS[i][1].test(m[0])) continue;
+    if (m.index > ultimo) html += trozo(texto.slice(ultimo, m.index), base, extra);
+    html += trozo(m[0], c[tipo], tipo === 'abajo' || tipo === 'arriba' ? 'font-weight:bold;' : '');
+    ultimo = m.index + m[0].length;
   }
-  return espaciosVisibles(escaparHtml(linea));
+  if (ultimo < texto.length) html += trozo(texto.slice(ultimo), base, extra);
+  return html;
+}
+
+/** Comando tras el prompt: el verbo (primera palabra) en azul, el resto con fichas. */
+function colorearComando(texto) {
+  const c = COLORES_CODIGO;
+  const m = /^(\s*)([^\s]+)(.*)$/.exec(texto);
+  if (!m) return texto ? trozo(texto, c.comando) : '';
+  return (
+    (m[1] ? trozo(m[1], c.comando) : '') +
+    trozo(m[2], c.verbo, 'font-weight:bold;') +
+    (m[3] ? colorearFichas(m[3], c.comando) : '')
+  );
+}
+
+/** Una línea de comandos → HTML: prompt, verbo, IP/MAC, interfaces, estados, cadenas, números y comentarios. */
+export function resaltarLinea(linea, lenguaje) {
+  const c = COLORES_CODIGO;
+  if (!linea) return trozo(' ', c.texto);
+  const conf = LENGUAJES[lenguaje] ?? GENERICO;
+  if (conf.comentario.test(linea)) return trozo(linea, c.comentario, 'font-style:italic;');
+  const m = conf.prompt.exec(linea);
+  if (m) return trozo(m[1], c.prompt) + colorearComando(m[2]);
+  return colorearFichas(linea, c.texto);
 }
 
 function codigoHtml(b, t) {
   const c = COLORES_CODIGO;
-  const nombre = LENGUAJES[b.lenguaje]?.nombre ?? (b.lenguaje ? b.lenguaje.toUpperCase() : 'Comandos');
-  const mono = "Consolas,'Courier New',Menlo,monospace";
+  const nombre = LENGUAJES[b.lenguaje]?.nombre ?? (b.lenguaje ? b.lenguaje : 'Comandos');
   const lineas = (b.lineas.length ? b.lineas : ['']).map((l) => resaltarLinea(l, b.lenguaje)).join('<br>');
+  // Mayúsculas escritas (Outlook ignora text-transform) y color en el propio texto.
+  const rotulo = `<span style="font-family:${t.fuente};font-size:11px;font-weight:bold;letter-spacing:0.08em;color:#a9b8cf;">${escaparHtml(nombre.toUpperCase())}</span>`;
   return (
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;">` +
-    `<tr><td bgcolor="${c.cabecera}" style="background-color:${c.cabecera};padding:7px 14px;border-radius:8px 8px 0 0;font-family:${t.fuente};font-size:11px;line-height:1.4;font-weight:bold;letter-spacing:0.08em;text-transform:uppercase;color:#a9b8cf;">${escaparHtml(nombre)}</td></tr>` +
-    `<tr><td bgcolor="${c.fondo}" style="background-color:${c.fondo};padding:14px 16px;border-radius:0 0 8px 8px;font-family:${mono};font-size:13px;line-height:1.6;color:${c.texto};mso-line-height-rule:exactly;">${lineas}</td></tr>` +
+    `<tr><td bgcolor="${c.cabecera}" style="background-color:${c.cabecera};padding:7px 14px;border-radius:8px 8px 0 0;font-family:${t.fuente};font-size:11px;line-height:1.4;color:#a9b8cf;">${rotulo}</td></tr>` +
+    `<tr><td bgcolor="${c.fondo}" style="background-color:${c.fondo};padding:14px 16px;border-radius:0 0 8px 8px;font-family:${MONO};font-size:13px;line-height:1.6;color:${c.texto};mso-line-height-rule:exactly;">${lineas}</td></tr>` +
     `</table>${espacio(16)}`
   );
 }
