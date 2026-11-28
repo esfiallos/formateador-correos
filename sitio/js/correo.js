@@ -125,6 +125,21 @@ const espacio = (px) => `<div style="height:${px}px;line-height:${px}px;font-siz
 const presentacion = (contenido, extra = '') =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;${extra}">${contenido}</table>`;
 
+/**
+ * Recuadro con fondo OSCURO y texto claro. El fondo va en la <table>, no en la celda: Outlook web /
+ * Outlook.com (Hotmail) / el nuevo Outlook, al pegar «combinando formato», cambian todo el texto a su
+ * fuente y color por defecto (negro), conservan el fondo de las celdas y quitan el de las tablas.
+ * Así, en ese caso el recuadro queda negro sobre blanco (legible) en vez de negro sobre oscuro.
+ */
+function panelOscuro(fondo, estiloCelda, contenido, { radio = '', atributosCelda = '' } = {}) {
+  const r = radio ? `border-radius:${radio};` : '';
+  return (
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${fondo}" ` +
+    `style="width:100%;background-color:${fondo};border-collapse:separate;${r}">` +
+    `<tr><td${atributosCelda} style="${estiloCelda}${r}">${contenido}</td></tr></table>`
+  );
+}
+
 function tituloHtml(b, t, primero) {
   const fmt = (s) => formatoEnLinea(s, { colorEnlace: t.acentoTexto });
   const arriba = primero ? 0 : b.nivel === 1 ? 26 : 22;
@@ -164,9 +179,11 @@ function tablaHtml(b, t) {
   const celda = `font-family:${t.fuente};font-size:${t.tam - 1}px;line-height:1.45;padding:9px 12px;text-align:left;vertical-align:top;`;
   const cabecera = b.cabecera
     ? `<tr>${b.cabecera
-        .map(
-          (c) =>
-            `<th align="left" bgcolor="${cabFondo}" style="${celda}background-color:${cabFondo};color:${cabTexto};font-weight:bold;border:1px solid ${cabBorde};">${fmt(c)}</th>`,
+        .map((c) =>
+          fuerte
+            ? // Sin fondo propio: se ve el de la <table> (ver panelOscuro); las filas de datos llevan el suyo.
+              `<th align="left" style="${celda}color:${cabTexto};font-weight:bold;border:1px solid ${cabBorde};">${fmt(c)}</th>`
+            : `<th align="left" bgcolor="${cabFondo}" style="${celda}background-color:${cabFondo};color:${cabTexto};font-weight:bold;border:1px solid ${cabBorde};">${fmt(c)}</th>`,
         )
         .join('')}</tr>`
     : '';
@@ -181,7 +198,9 @@ function tablaHtml(b, t) {
         .join('')}</tr>`;
     })
     .join('');
-  return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">${cabecera}${filas}</table>${espacio(16)}`;
+  const fondoTabla = fuerte && b.cabecera ? ` bgcolor="${cabFondo}"` : '';
+  const estiloFondo = fuerte && b.cabecera ? `background-color:${cabFondo};` : '';
+  return `<table width="100%" cellpadding="0" cellspacing="0" border="0"${fondoTabla} style="width:100%;${estiloFondo}border-collapse:collapse;">${cabecera}${filas}</table>${espacio(16)}`;
 }
 
 function botonHtml(b, t) {
@@ -191,9 +210,13 @@ function botonHtml(b, t) {
   const contenido = url
     ? `<a href="${url}" target="_blank" style="${estilo}">${rotulo}</a>`
     : `<span style="${estilo}">${rotulo}</span>`;
+  // Con enlace, el fondo va en la celda: Outlook conserva el color de los enlaces aun al combinar formato.
+  // Sin enlace, el texto se volvería negro: el fondo va en la tabla para que se quite junto con él.
+  const fondoCelda = url ? ` bgcolor="${t.acento}"` : '';
+  const fondoTabla = url ? '' : ` bgcolor="${t.acento}"`;
   return (
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;"><tr>` +
-    `<td align="center" bgcolor="${t.acento}" style="background-color:${t.acento};border-radius:6px;">${contenido}</td></tr></table>${espacio(18)}`
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0"${fondoTabla} style="border-collapse:separate;${url ? '' : `background-color:${t.acento};`}border-radius:6px;"><tr>` +
+    `<td align="center"${fondoCelda} style="${url ? `background-color:${t.acento};` : ''}border-radius:6px;">${contenido}</td></tr></table>${espacio(18)}`
   );
 }
 
@@ -349,11 +372,13 @@ function codigoHtml(b, t) {
   const lineas = (b.lineas.length ? b.lineas : ['']).map((l) => resaltarLinea(l, b.lenguaje)).join('<br>');
   // Mayúsculas escritas (Outlook ignora text-transform) y color en el propio texto.
   const rotulo = `<span style="font-family:${t.fuente};font-size:11px;font-weight:bold;letter-spacing:0.08em;color:#a9b8cf;">${escaparHtml(nombre.toUpperCase())}</span>`;
+  // Dos paneles apilados (cabecera y cuerpo) con el fondo en la tabla: ver panelOscuro.
   return (
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;">` +
-    `<tr><td bgcolor="${c.cabecera}" style="background-color:${c.cabecera};padding:7px 14px;border-radius:8px 8px 0 0;font-family:${t.fuente};font-size:11px;line-height:1.4;color:#a9b8cf;">${rotulo}</td></tr>` +
-    `<tr><td bgcolor="${c.fondo}" style="background-color:${c.fondo};padding:14px 16px;border-radius:0 0 8px 8px;font-family:${MONO};font-size:13px;line-height:1.6;color:${c.texto};mso-line-height-rule:exactly;">${lineas}</td></tr>` +
-    `</table>${espacio(16)}`
+    panelOscuro(c.cabecera, `padding:7px 14px;font-family:${t.fuente};font-size:11px;line-height:1.4;color:#a9b8cf;`, rotulo, { radio: '8px 8px 0 0' }) +
+    panelOscuro(c.fondo, `padding:14px 16px;font-family:${MONO};font-size:13px;line-height:1.6;color:${c.texto};mso-line-height-rule:exactly;`, lineas, {
+      radio: '0 0 8px 8px',
+    }) +
+    espacio(16)
   );
 }
 
@@ -433,15 +458,19 @@ function logoHtml(url, alt, centrado) {
 
 function encabezadoHtml({ titulo, subtitulo, logo, empresa }, t) {
   const fmt = (s, color) => formatoEnLinea(s, { colorEnlace: color });
-  const arriba = `border-radius:${t.radio}px ${t.radio}px 0 0;`;
 
   if (t.diseno === 'corporativo') {
     const sub = mezclar(t.sobreAcento, t.acento, 0.22);
     return (
-      `<tr><td bgcolor="${t.acento}" style="background-color:${t.acento};padding:28px 36px;${arriba}">` +
-      logoHtml(logo, empresa, false) +
-      (titulo ? `<h1 style="margin:0;font-family:${t.fuenteTitulos};font-size:${t.tam + 9}px;line-height:1.25;font-weight:bold;color:${t.sobreAcento};">${fmt(titulo, t.sobreAcento)}</h1>` : '') +
-      (subtitulo ? `<p style="margin:${titulo ? 6 : 0}px 0 0 0;font-family:${t.fuente};font-size:${t.tam}px;line-height:1.5;color:${sub};">${fmt(subtitulo, sub)}</p>` : '') +
+      `<tr><td style="padding:0;">` +
+      panelOscuro(
+        t.acento,
+        'padding:28px 36px;',
+        logoHtml(logo, empresa, false) +
+          (titulo ? `<h1 style="margin:0;font-family:${t.fuenteTitulos};font-size:${t.tam + 9}px;line-height:1.25;font-weight:bold;color:${t.sobreAcento};">${fmt(titulo, t.sobreAcento)}</h1>` : '') +
+          (subtitulo ? `<p style="margin:${titulo ? 6 : 0}px 0 0 0;font-family:${t.fuente};font-size:${t.tam}px;line-height:1.5;color:${sub};">${fmt(subtitulo, sub)}</p>` : ''),
+        { radio: t.radio ? `${t.radio}px ${t.radio}px 0 0` : '' },
+      ) +
       `</td></tr>`
     );
   }
@@ -459,11 +488,16 @@ function encabezadoHtml({ titulo, subtitulo, logo, empresa }, t) {
   if (t.diseno === 'elegante') {
     const sub = mezclar('#ffffff', t.oscuro, 0.3);
     return (
-      `<tr><td align="center" bgcolor="${t.oscuro}" style="background-color:${t.oscuro};padding:32px 36px 28px 36px;text-align:center;${arriba}">` +
-      logoHtml(logo, empresa, true) +
-      (titulo ? `<h1 style="margin:0;font-family:${t.fuenteTitulos};font-size:${t.tam + 10}px;line-height:1.25;font-weight:normal;color:#ffffff;">${fmt(titulo, '#ffffff')}</h1>` : '') +
-      `<table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:14px auto ${subtitulo ? 12 : 0}px auto;"><tr><td width="48" height="2" bgcolor="${mezclar(t.acento, '#ffffff', 0.35)}" style="width:48px;height:2px;line-height:2px;font-size:1px;background-color:${mezclar(t.acento, '#ffffff', 0.35)};">&nbsp;</td></tr></table>` +
-      (subtitulo ? `<p style="margin:0;font-family:${t.fuente};font-size:${t.tam - 3}px;line-height:1.4;letter-spacing:0.12em;text-transform:uppercase;color:${sub};">${fmt(subtitulo, sub)}</p>` : '') +
+      `<tr><td style="padding:0;">` +
+      panelOscuro(
+        t.oscuro,
+        'padding:32px 36px 28px 36px;text-align:center;',
+        logoHtml(logo, empresa, true) +
+          (titulo ? `<h1 style="margin:0;font-family:${t.fuenteTitulos};font-size:${t.tam + 10}px;line-height:1.25;font-weight:normal;color:#ffffff;">${fmt(titulo, '#ffffff')}</h1>` : '') +
+          `<table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:14px auto ${subtitulo ? 12 : 0}px auto;"><tr><td width="48" height="2" bgcolor="${mezclar(t.acento, '#ffffff', 0.35)}" style="width:48px;height:2px;line-height:2px;font-size:1px;background-color:${mezclar(t.acento, '#ffffff', 0.35)};">&nbsp;</td></tr></table>` +
+          (subtitulo ? `<p style="margin:0;font-family:${t.fuente};font-size:${t.tam - 3}px;line-height:1.4;letter-spacing:0.12em;text-transform:uppercase;color:${sub};">${fmt(subtitulo, sub)}</p>` : ''),
+        { radio: t.radio ? `${t.radio}px ${t.radio}px 0 0` : '', atributosCelda: ' align="center"' },
+      ) +
       `</td></tr>`
     );
   }

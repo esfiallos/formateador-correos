@@ -128,3 +128,28 @@ test('imágenes pegadas: solo data:image válidas, con ancho limitado al conteni
   assert.ok(!r.html.includes('javascript:'));
   assert.match(r.texto, /\[Imagen: Imagen 1\]/);
 });
+
+// Outlook web / Outlook.com / nuevo Outlook, al pegar «combinando formato», vuelven negro todo el texto,
+// conservan el fondo de las celdas (<td>/<th>) y quitan el de las tablas. Un fondo oscuro con texto claro
+// debe ir en la <table> para que, en ese caso, no quede texto negro sobre fondo oscuro.
+test('los fondos oscuros con texto claro van en la tabla, no en la celda', () => {
+  const oscuros = ['#243247', '#1a2433'];
+  for (const diseno of Object.keys(DISENOS)) {
+    const { html } = construirCorreo(
+      datos({
+        texto: '| A | B |\n|---|---|\n| 1 | 2 |\n\n```cisco\nR1#show ip int brief\n```\n\n[[Sin enlace | ]]',
+        encabezado: { titulo: 'Título', subtitulo: 'Sub' },
+        ajustes: { diseno, color: '#1e3a5f' },
+      }),
+      { ahora },
+    );
+    const t = { acento: '#1e3a5f', oscuro: mezclar('#1e3a5f', '#0b1120', 0.62) };
+    for (const color of [...oscuros, t.acento, t.oscuro]) {
+      for (const celda of html.matchAll(/<t[dh]\b[^>]*>(?!&nbsp;<)([^<]{1,40})/g)) {
+        // Una celda con fondo oscuro no debe tener texto directo.
+        if (celda[0].includes(`background-color:${color}`)) assert.fail(`${diseno}: texto «${celda[1]}» en celda con fondo ${color}`);
+      }
+    }
+    assert.match(html, /<table[^>]*bgcolor="#1a2433"/, diseno);
+  }
+});
