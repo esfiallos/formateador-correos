@@ -3057,3 +3057,45 @@ th .chip-var,
     transition: none !important;
   }
 }
+
+/* ── Gestión de plantillas: nueva, editar, eliminar ── */
+.fila-botones-plantilla {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.fila-botones-plantilla .boton {
+  justify-content: center;
+  padding-inline: 8px;
+}
+
+.ip-editar {
+  margin: 6px 0 0;
+  opacity: 0;
+}
+
+.item-plantilla:hover .ip-editar,
+.ip-editar:focus-visible {
+  opacity: 1;
+}
+
+.ip-editar:hover {
+  color: var(--acento);
+  background: var(--acento-suave);
+}
+
+/* En pantallas táctiles no hay «hover»: los botones de cada plantilla siempre a la vista. */
+@media (hover: none) {
+  .ip-editar,
+  .ip-restaurar,
+  .ip-eliminar {
+    opacity: 1;
+  }
+}
+
+.recuperar-plantillas {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 4px;
+}

@@ -108,9 +108,14 @@
         </label>
         <div class="lista-plantillas" id="listaPlantillas"></div>
         <div class="lateral-pie">
-          <button type="button" class="boton boton-secundario boton-ancho" data-accion="guardar-plantilla">
-            <svg class="ico"><use href="#i-guardar"/></svg>Guardar como plantilla
-          </button>
+          <div class="fila-botones-plantilla">
+            <button type="button" class="boton boton-secundario" data-accion="nueva-plantilla" title="Crea una plantilla en blanco para escribirla desde cero">
+              <svg class="ico"><use href="#i-mas"/></svg>Nueva
+            </button>
+            <button type="button" class="boton boton-secundario" data-accion="guardar-plantilla" title="Guarda el mensaje actual como una plantilla nueva">
+              <svg class="ico"><use href="#i-guardar"/></svg>Guardar actual
+            </button>
+          </div>
           <div class="fila-acciones">
             <button type="button" class="boton-texto" data-accion="importar"><svg class="ico ico-chico"><use href="#i-subir"/></svg>Importar</button>
             <button type="button" class="boton-texto" data-accion="exportar"><svg class="ico ico-chico"><use href="#i-descargar"/></svg>Exportar mías</button>
@@ -413,13 +418,15 @@
   <dialog id="dialogoPlantilla" class="dialogo" aria-labelledby="plantillaTitulo">
     <form method="dialog">
       <h2 id="plantillaTitulo">Guardar como plantilla</h2>
-      <p class="ayuda">Se guardan el título, el subtítulo y el mensaje actuales, con sus variables. Si usas un nombre existente, se actualiza.</p>
+      <p class="ayuda" id="plantillaAyuda">Se guardan el título, el subtítulo y el mensaje actuales, con sus variables. Si usas un nombre existente, se actualiza.</p>
       <label class="campo"><span>Nombre</span><input type="text" name="nombre" required maxlength="80" placeholder="Ej. Reporte diario"></label>
       <label class="campo"><span>Categoría</span><input type="text" name="categoria" maxlength="40" placeholder="Ej. Escalamientos" list="categoriasPlantilla"></label>
+      <label class="campo"><span>Descripción (opcional)</span><input type="text" name="descripcion" maxlength="200" placeholder="Para qué sirve, en una línea"></label>
       <datalist id="categoriasPlantilla"></datalist>
       <div class="dialogo-acciones">
         <button type="submit" value="cancelar" class="boton boton-fantasma" formnovalidate>Cancelar</button>
-        <button type="submit" value="guardar" class="boton boton-primario">Guardar</button>
+        <button type="submit" value="contenido" class="boton boton-secundario" id="plantillaEditarContenido" hidden>Guardar y editar el contenido</button>
+        <button type="submit" value="guardar" class="boton boton-primario" id="plantillaGuardar">Guardar</button>
       </div>
     </form>
   </dialog>
@@ -431,8 +438,9 @@
         <span class="ip-descripcion"></span>
         <span class="ip-meta"></span>
       </button>
+      <button type="button" class="boton-icono ip-editar" aria-label="Editar plantilla" title="Editar nombre, categoría o contenido"><svg class="ico"><use href="#i-redactar"/></svg></button>
       <button type="button" class="boton-icono ip-restaurar" aria-label="Restaurar la versión original" title="Restaurar la versión original" hidden><svg class="ico"><use href="#i-deshacer"/></svg></button>
-      <button type="button" class="boton-icono ip-eliminar" aria-label="Eliminar plantilla" title="Eliminar plantilla" hidden><svg class="ico"><use href="#i-basura"/></svg></button>
+      <button type="button" class="boton-icono ip-eliminar" aria-label="Eliminar plantilla" title="Eliminar plantilla"><svg class="ico"><use href="#i-basura"/></svg></button>
     </div>
   </template>
 </body>

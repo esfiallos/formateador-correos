@@ -19,6 +19,7 @@ const CLAVES = {
   lateral: 'redacta:lateral-plantillas',
   modo: 'redacta:modo-editor',
   ediciones: 'redacta:plantillas-editadas:v1',
+  ocultas: 'redacta:plantillas-ocultas:v1',
 };
 
 const $ = (sel, raiz = document) => raiz.querySelector(sel);
@@ -852,25 +853,36 @@ const contenidoActual = () => (sincronizarEditores(), {
   titulo: estado.encabezado.titulo,
   subtitulo: estado.encabezado.subtitulo,
   plantilla: estado.plantilla,
+  valores: { ...estado.valores },
 });
 
-function aplicarContenido({ texto, titulo, subtitulo, plantilla = null }) {
+/**
+ * Pone un contenido en el editor. Con `valores`, reemplaza también los datos (ticket, cliente…):
+ * al cargar una plantilla se pasan vacíos para que no se cuelen datos de un caso anterior.
+ * La firma, el diseño y el pie no se tocan.
+ */
+function aplicarContenido({ texto, titulo, subtitulo, plantilla = null, valores }) {
   estado.texto = texto;
   estado.encabezado.titulo = titulo;
   estado.encabezado.subtitulo = subtitulo;
   estado.plantilla = plantilla;
+  if (valores) {
+    estado.valores = { ...valores };
+    firmaVariables = null;
+  }
   poblarCampos();
   cargarEditores();
   alCambiarTexto();
   actualizarVariables();
   pintarPlantillaActiva();
   guardarEstado();
+  if (valores) refrescarChips();
   programarVista();
 }
 
 function limpiarTexto() {
   const previo = contenidoActual();
-  aplicarContenido({ texto: '', titulo: '', subtitulo: '' });
+  aplicarContenido({ texto: '', titulo: '', subtitulo: '', valores: {} });
   editorCuerpo.el.focus();
   aviso('Contenido borrado.', { accion: 'Deshacer', alHacer: () => aplicarContenido(previo) });
 }
@@ -898,9 +910,11 @@ function vaciarVariables() {
 
 // Plantillas incluidas que la persona editó: id → { titulo, subtitulo, cuerpo, editadaEn }.
 let ediciones = leer(CLAVES.ediciones, {}) || {};
+// Plantillas incluidas que la persona eliminó (se pueden recuperar).
+let ocultas = new Set((leer(CLAVES.ocultas, []) || []).filter((id) => typeof id === 'string'));
 
 const todasLasPlantillas = () => [
-  ...PLANTILLAS.map((p) => (ediciones[p.id] ? { ...p, ...ediciones[p.id], editada: true } : p)),
+  ...PLANTILLAS.filter((p) => !ocultas.has(p.id)).map((p) => (ediciones[p.id] ? { ...p, ...ediciones[p.id], editada: true } : p)),
   ...plantillasPropias.map((p) => ({ ...p, propia: true })),
 ];
 const plantillaActiva = () => todasLasPlantillas().find((p) => p.id === estado.plantilla) ?? null;
@@ -943,7 +957,7 @@ function guardarEnPlantilla() {
     plantillasPropias[i] = { ...plantillasPropias[i], ...datos };
     guardarPlantillas();
   } else {
-    ediciones[p.id] = { ...datos, editadaEn: new Date().toISOString() };
+    ediciones[p.id] = { ...ediciones[p.id], ...datos, editadaEn: new Date().toISOString() };
     guardarEdiciones();
   }
   if (imagenesUsadas(datos.cuerpo).length) aviso('Nota: las imágenes pegadas no se guardan dentro de la plantilla.', { duracion: 5000 });
@@ -1018,10 +1032,12 @@ function pintarPlantillas() {
         }
       } else $('.ip-meta', nodo).remove();
       $('.ip-usar', nodo).addEventListener('click', () => (p.libre ? usarMensajeLibre() : usarPlantilla(p)));
-      if (p.propia) {
-        const eliminar = $('.ip-eliminar', nodo);
-        eliminar.hidden = false;
-        eliminar.addEventListener('click', () => eliminarPlantilla(p.id));
+      if (p.libre) {
+        $('.ip-editar', nodo).remove();
+        $('.ip-eliminar', nodo).remove();
+      } else {
+        $('.ip-editar', nodo).addEventListener('click', () => abrirDialogoPlantilla({ modo: 'editar', id: p.id }));
+        $('.ip-eliminar', nodo).addEventListener('click', () => eliminarPlantilla(p.id));
       }
       if (p.editada) {
         const restaurar = $('.ip-restaurar', nodo);
@@ -1036,6 +1052,17 @@ function pintarPlantillas() {
     vacio.className = 'vacio';
     vacio.textContent = 'No hay plantillas que coincidan.';
     nodos.push(vacio);
+  }
+  if (ocultas.size && !filtro) {
+    const fila = document.createElement('div');
+    fila.className = 'recuperar-plantillas';
+    const boton = document.createElement('button');
+    boton.type = 'button';
+    boton.className = 'boton-texto';
+    boton.textContent = `Recuperar incluidas eliminadas (${ocultas.size})`;
+    boton.addEventListener('click', recuperarIncluidas);
+    fila.append(boton);
+    nodos.push(fila);
   }
   $('#listaPlantillas').replaceChildren(...nodos);
   pintarPlantillaActiva();
@@ -1056,20 +1083,21 @@ function cerrarCajonEnPantallaChica() {
 
 function usarPlantilla(p) {
   const previo = contenidoActual();
-  aplicarContenido({ texto: p.cuerpo, titulo: p.titulo ?? '', subtitulo: p.subtitulo ?? '', plantilla: p.id });
+  // Cada carga empieza con los datos vacíos: un correo nuevo no debe arrastrar el ticket o el cliente anterior.
+  aplicarContenido({ texto: p.cuerpo, titulo: p.titulo ?? '', subtitulo: p.subtitulo ?? '', plantilla: p.id, valores: {} });
   if ((p.titulo || p.subtitulo) && !estado.encabezado.mostrar) {
     estado.encabezado.mostrar = true;
     poblarCampos();
     actualizarVariables();
   }
   cerrarCajonEnPantallaChica();
-  aviso(`Plantilla «${p.nombre}» cargada.`, { accion: 'Deshacer', alHacer: () => aplicarContenido(previo) });
+  aviso(`Plantilla «${p.nombre}» cargada con los datos en blanco.`, { accion: 'Deshacer', alHacer: () => aplicarContenido(previo) });
   ($('#variables .pendiente textarea') ?? editorCuerpo.el).focus();
 }
 
 function usarMensajeLibre() {
   const previo = contenidoActual();
-  aplicarContenido({ texto: '', titulo: '', subtitulo: '' });
+  aplicarContenido({ texto: '', titulo: '', subtitulo: '', valores: {} });
   cerrarCajonEnPantallaChica();
   editorCuerpo.el.focus();
   if (previo.texto.trim()) aviso('Listo para un mensaje nuevo.', { accion: 'Deshacer', alHacer: () => aplicarContenido(previo) });
@@ -1080,30 +1108,83 @@ function guardarPlantillas() {
   pintarPlantillas();
 }
 
-function abrirDialogoPlantilla() {
+const TEXTOS_DIALOGO = {
+  guardar: {
+    titulo: 'Guardar como plantilla',
+    ayuda: 'Se guardan el título, el subtítulo y el mensaje actuales, con sus variables (no los datos que completaste). Si usas un nombre existente, se actualiza.',
+    boton: 'Guardar',
+  },
+  nueva: {
+    titulo: 'Nueva plantilla',
+    ayuda: 'Se abre en blanco para que escribas el título, el subtítulo y el mensaje. Inserta lo que cambia en cada caso con el botón «Dato» y guarda con «Guardar en la plantilla» (Ctrl+S).',
+    boton: 'Crear y escribir',
+  },
+  editar: {
+    titulo: 'Editar plantilla',
+    ayuda: 'Cambia el nombre, la categoría o la descripción. Para cambiar el texto, usa «Guardar y editar el contenido»: se abre en el editor y guardas con Ctrl+S.',
+    boton: 'Guardar',
+  },
+};
+
+let dialogoPlantilla = { modo: 'guardar', id: null };
+
+function abrirDialogoPlantilla({ modo = 'guardar', id = null } = {}) {
   sincronizarEditores();
-  if (!estado.texto.trim()) return aviso('Escribe un mensaje antes de guardarlo como plantilla.', { tipo: 'alerta' });
+  if (modo === 'guardar' && !estado.texto.trim()) return aviso('Escribe un mensaje antes de guardarlo como plantilla.', { tipo: 'alerta' });
+  const p = modo === 'editar' ? todasLasPlantillas().find((x) => x.id === id) : null;
+  if (modo === 'editar' && !p) return;
+  dialogoPlantilla = { modo, id };
   const dialogo = $('#dialogoPlantilla');
   const formulario = $('form', dialogo);
   formulario.reset();
-  const propia = plantillasPropias.find((p) => p.id === estado.plantilla);
-  formulario.nombre.value = propia?.nombre ?? estado.encabezado.titulo.replace(/\{\{[^}]*\}\}/g, '').replace(/[·\s]+$/, '').trim().slice(0, 80);
-  formulario.categoria.value = propia?.categoria ?? plantillaActiva()?.categoria ?? '';
+  const textos = TEXTOS_DIALOGO[modo];
+  $('#plantillaTitulo').textContent = textos.titulo;
+  $('#plantillaAyuda').textContent = textos.ayuda;
+  $('#plantillaGuardar').textContent = textos.boton;
+  $('#plantillaEditarContenido').hidden = modo !== 'editar';
+  if (modo === 'editar') {
+    formulario.nombre.value = p.nombre;
+    formulario.categoria.value = p.categoria ?? '';
+    formulario.descripcion.value = p.descripcion ?? '';
+  } else if (modo === 'guardar') {
+    const propia = plantillasPropias.find((x) => x.id === estado.plantilla);
+    formulario.nombre.value = propia?.nombre ?? estado.encabezado.titulo.replace(/\{\{[^}]*\}\}/g, '').replace(/[·\s]+$/, '').trim().slice(0, 80);
+    formulario.categoria.value = propia?.categoria ?? plantillaActiva()?.categoria ?? '';
+    formulario.descripcion.value = propia?.descripcion ?? '';
+  }
   dialogo.showModal();
   formulario.nombre.select();
 }
 
+/** Nombre que no choca con otra plantilla propia (salvo la que se edita). */
+function nombreLibre(nombre, salvoId = null) {
+  const usados = new Set(plantillasPropias.filter((p) => p.id !== salvoId).map((p) => p.nombre.toLowerCase()));
+  let candidato = nombre;
+  for (let n = 2; usados.has(candidato.toLowerCase()); n++) candidato = `${nombre} (${n})`;
+  return candidato;
+}
+
 function alCerrarDialogoPlantilla() {
   const dialogo = $('#dialogoPlantilla');
-  if (dialogo.returnValue !== 'guardar') return;
+  const accion = dialogo.returnValue;
+  if (accion !== 'guardar' && accion !== 'contenido') return;
   const formulario = $('form', dialogo);
   const nombre = formulario.nombre.value.trim();
   if (!nombre) return;
-  const nueva = {
-    id: `propia-${Date.now().toString(36)}`,
+  const meta = {
     nombre,
     categoria: formulario.categoria.value.trim(),
-    descripcion: '',
+    descripcion: formulario.descripcion.value.trim(),
+  };
+  const { modo, id } = dialogoPlantilla;
+
+  if (modo === 'editar') return editarDatosPlantilla(id, meta, accion === 'contenido');
+  if (modo === 'nueva') return crearPlantillaEnBlanco(meta);
+
+  // guardar: el contenido actual como plantilla propia (si el nombre existe, se actualiza).
+  const nueva = {
+    id: `propia-${Date.now().toString(36)}`,
+    ...meta,
     titulo: estado.encabezado.titulo,
     subtitulo: estado.encabezado.subtitulo,
     cuerpo: estado.texto,
@@ -1120,26 +1201,102 @@ function alCerrarDialogoPlantilla() {
   aviso(existente >= 0 ? `Plantilla «${nombre}» actualizada.` : `Plantilla «${nombre}» guardada en «Mis plantillas».`, { tipo: 'exito' });
 }
 
-function eliminarPlantilla(id) {
-  const indice = plantillasPropias.findIndex((p) => p.id === id);
-  if (indice < 0) return;
-  const [quitada] = plantillasPropias.splice(indice, 1);
+/** Crea una plantilla vacía y la abre en el editor para escribirla desde cero. */
+function crearPlantillaEnBlanco(meta) {
+  const nueva = { id: `propia-${Date.now().toString(36)}`, ...meta, nombre: nombreLibre(meta.nombre), titulo: '', subtitulo: '', cuerpo: '' };
+  plantillasPropias.unshift(nueva);
   guardarPlantillas();
-  aviso(`Plantilla «${quitada.nombre}» eliminada.`, {
+  const previo = contenidoActual();
+  aplicarContenido({ texto: '', titulo: '', subtitulo: '', plantilla: nueva.id, valores: {} });
+  if (!estado.encabezado.mostrar) {
+    estado.encabezado.mostrar = true;
+    poblarCampos();
+  }
+  cerrarCajonEnPantallaChica();
+  editorCuerpo.el.focus();
+  aviso(`«${nueva.nombre}» creada. Escribe el mensaje y guárdalo con Ctrl+S.`, {
+    tipo: 'exito',
+    duracion: 6000,
     accion: 'Deshacer',
     alHacer: () => {
-      plantillasPropias.splice(indice, 0, quitada);
+      plantillasPropias = plantillasPropias.filter((p) => p.id !== nueva.id);
       guardarPlantillas();
+      aplicarContenido(previo);
     },
   });
 }
 
+/** Cambia nombre, categoría y descripción; con `abrir`, la carga en el editor para cambiar el texto. */
+function editarDatosPlantilla(id, meta, abrir) {
+  const propia = plantillasPropias.findIndex((p) => p.id === id);
+  if (propia >= 0) {
+    plantillasPropias[propia] = { ...plantillasPropias[propia], ...meta, nombre: nombreLibre(meta.nombre, id) };
+    guardarPlantillas();
+  } else {
+    const original = PLANTILLAS.find((p) => p.id === id);
+    if (!original) return;
+    // En las incluidas se guarda solo lo que difiere del original, para que «Restaurar» siga teniendo sentido.
+    const cambios = Object.fromEntries(Object.entries(meta).filter(([k, v]) => v !== (original[k] ?? '')));
+    const resto = Object.fromEntries(Object.entries(ediciones[id] ?? {}).filter(([k]) => !(k in meta) && k !== 'editadaEn'));
+    const nueva = { ...resto, ...cambios };
+    if (Object.keys(nueva).length) ediciones[id] = { ...nueva, editadaEn: new Date().toISOString() };
+    else delete ediciones[id];
+    guardarEdiciones();
+  }
+  const p = todasLasPlantillas().find((x) => x.id === id);
+  if (abrir && p) {
+    usarPlantilla(p);
+    aviso(`Editando «${p.nombre}». Cambia el texto y guarda con Ctrl+S.`, { duracion: 6000 });
+  } else aviso('Plantilla actualizada.', { tipo: 'exito' });
+}
+
+function eliminarPlantilla(id) {
+  const indice = plantillasPropias.findIndex((p) => p.id === id);
+  if (indice >= 0) {
+    const [quitada] = plantillasPropias.splice(indice, 1);
+    guardarPlantillas();
+    aviso(`Plantilla «${quitada.nombre}» eliminada.`, {
+      accion: 'Deshacer',
+      duracion: 8000,
+      alHacer: () => {
+        plantillasPropias.splice(indice, 0, quitada);
+        guardarPlantillas();
+      },
+    });
+    return;
+  }
+  const incluida = todasLasPlantillas().find((p) => p.id === id && !p.propia);
+  if (!incluida) return;
+  ocultas.add(id);
+  guardarOcultas();
+  aviso(`Plantilla «${incluida.nombre}» eliminada. Puedes recuperarla al final de la lista.`, {
+    accion: 'Deshacer',
+    duracion: 8000,
+    alHacer: () => {
+      ocultas.delete(id);
+      guardarOcultas();
+    },
+  });
+}
+
+function guardarOcultas() {
+  if (!guardar(CLAVES.ocultas, [...ocultas])) aviso('No se pudo guardar el cambio en este navegador.', { tipo: 'error' });
+  pintarPlantillas();
+}
+
+function recuperarIncluidas() {
+  const total = ocultas.size;
+  ocultas = new Set();
+  guardarOcultas();
+  aviso(total === 1 ? '1 plantilla recuperada.' : `${total} plantillas recuperadas.`, { tipo: 'exito' });
+}
+
 /** Exporta las plantillas propias y las incluidas que editaste (para compartir con el equipo). */
 function exportarPlantillas() {
-  const editadas = Object.entries(ediciones).map(([id, e]) => {
-    const original = PLANTILLAS.find((p) => p.id === id);
-    return { base: id, nombre: original?.nombre ?? id, categoria: original?.categoria ?? '', titulo: e.titulo, subtitulo: e.subtitulo, cuerpo: e.cuerpo };
-  });
+  const editadas = Object.keys(ediciones)
+    .map((id) => todasLasPlantillas().find((p) => p.id === id))
+    .filter(Boolean)
+    .map((p) => ({ base: p.id, nombre: p.nombre, categoria: p.categoria ?? '', descripcion: p.descripcion ?? '', titulo: p.titulo ?? '', subtitulo: p.subtitulo ?? '', cuerpo: p.cuerpo }));
   const lista = [...plantillasPropias, ...editadas];
   if (!lista.length) return aviso('Aún no tienes plantillas propias ni editadas para exportar.');
   descargarArchivo('plantillas-redacta.json', JSON.stringify(lista, null, 2), 'application/json');
@@ -1237,7 +1394,8 @@ const ACCIONES = {
   descargar: descargarCorreo,
   limpiar: limpiarTexto,
   'vaciar-variables': vaciarVariables,
-  'guardar-plantilla': abrirDialogoPlantilla,
+  'guardar-plantilla': () => abrirDialogoPlantilla({ modo: 'guardar' }),
+  'nueva-plantilla': () => abrirDialogoPlantilla({ modo: 'nueva' }),
   exportar: exportarPlantillas,
   importar: () => $('#archivoPlantillas').click(),
   'elegir-imagen': () => $('#archivoImagen').click(),
